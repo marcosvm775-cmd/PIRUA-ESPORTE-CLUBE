@@ -1,0 +1,7 @@
+{
+  "name": "Piruá Esporte Clube",
+  "description": "Sistema oficial de gestão do Piruá Esporte Clube: cadastros, presença, anamnese e carteirinhas.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
