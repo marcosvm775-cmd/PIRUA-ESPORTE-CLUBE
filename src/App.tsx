@@ -258,29 +258,102 @@ const ESCUDO_URL = `data:image/svg+xml;utf8,${encodeURIComponent(`
 
 // --- Components ---
 
-// --- Components ---
-
-function Login({ onLogin, error, username, setUsername, password, setPassword }: { 
+function Login({ onLogin, error, username, setUsername, password, setPassword, setIsRegistering }: { 
   onLogin: (e: React.FormEvent) => void, 
   error: string,
   username: string,
   setUsername: (v: string) => void,
   password: string,
-  setPassword: (v: string) => void
+  setPassword: (v: string) => void,
+  setIsRegistering: (v: boolean) => void
 }) {
+  const [loginType, setLoginType] = useState<'selection' | 'adm' | 'aluno'>('selection');
+
+  if (loginType === 'selection') {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-2xl"
+        >
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-24 h-24 bg-zinc-800 rounded-3xl flex items-center justify-center border border-zinc-700 mb-6 shadow-xl">
+              <img src={ESCUDO_URL} alt="Logo" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
+            </div>
+            <h1 className="text-3xl font-black tracking-tighter text-yellow-400">PIRUÁ E.C.</h1>
+            <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-2">Seja bem-vindo</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            <button 
+              onClick={() => setLoginType('adm')}
+              className="group relative flex items-center gap-4 bg-zinc-800 border border-zinc-700 p-6 rounded-2xl hover:border-yellow-400 transition-all text-left overflow-hidden"
+            >
+              <div className="bg-yellow-400/10 text-yellow-400 p-3 rounded-xl group-hover:bg-yellow-400 group-hover:text-black transition-all">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-zinc-100">Acessar ADM</h3>
+                <p className="text-xs text-zinc-500">Gestão e administração</p>
+              </div>
+              <ChevronRight className="ml-auto text-zinc-600 group-hover:text-yellow-400 transition-all" />
+            </button>
+
+            <button 
+              onClick={() => setLoginType('aluno')}
+              className="group relative flex items-center gap-4 bg-zinc-800 border border-zinc-700 p-6 rounded-2xl hover:border-yellow-400 transition-all text-left overflow-hidden"
+            >
+              <div className="bg-yellow-400/10 text-yellow-400 p-3 rounded-xl group-hover:bg-yellow-400 group-hover:text-black transition-all">
+                <UserCircle size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-zinc-100">Acessar Aluno</h3>
+                <p className="text-xs text-zinc-500">Meu perfil e carteirinha</p>
+              </div>
+              <ChevronRight className="ml-auto text-zinc-600 group-hover:text-yellow-400 transition-all" />
+            </button>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-zinc-800">
+            <button 
+              onClick={() => setIsRegistering(true)}
+              className="w-full bg-zinc-800 text-zinc-100 font-bold py-4 rounded-xl border border-zinc-700 hover:border-yellow-400 transition-all uppercase text-xs tracking-widest"
+            >
+              Novo Aluno? Cadastre-se aqui
+            </button>
+          </div>
+          
+          <p className="text-center text-[10px] text-zinc-600 mt-10 uppercase tracking-widest font-bold">
+            Sistema de Gestão Esportiva v1.0
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
         className="w-full max-w-md bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-2xl"
       >
+        <button 
+          onClick={() => setLoginType('selection')}
+          className="flex items-center gap-2 text-zinc-500 hover:text-yellow-400 transition-all text-xs font-bold uppercase mb-8"
+        >
+          <ChevronLeft size={16} /> Voltar
+        </button>
+
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-zinc-800 rounded-2xl flex items-center justify-center border border-zinc-700 mb-4">
-            <img src={ESCUDO_URL} alt="Logo" className="w-14 h-14 object-contain" referrerPolicy="no-referrer" />
+          <div className="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center border border-zinc-700 mb-4">
+            <img src={ESCUDO_URL} alt="Logo" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />
           </div>
-          <h1 className="text-2xl font-black tracking-tighter text-yellow-400">PIRUÁ E.C.</h1>
-          <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Atletas</p>
+          <h1 className="text-xl font-black tracking-tighter text-yellow-400">
+            {loginType === 'adm' ? 'ACESSO ADMINISTRATIVO' : 'PORTAL DO ALUNO'}
+          </h1>
+          <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Piruá Esporte Clube</p>
         </div>
 
         <form onSubmit={onLogin} className="space-y-6">
@@ -319,7 +392,7 @@ function Login({ onLogin, error, username, setUsername, password, setPassword }:
             type="submit"
             className="w-full bg-yellow-400 text-black font-black py-4 rounded-xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20"
           >
-            Entrar no Sistema
+            Entrar
           </button>
         </form>
       </motion.div>
@@ -364,22 +437,31 @@ export default function App() {
   const [eventLineups, setEventLineups] = useState<Record<string, string[]>>({});
 
   // Fetch data on mount
+  const [isRegistering, setIsRegistering] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const healthRes = await fetch('/api/health');
+        if (!healthRes.ok) throw new Error("Server health check failed");
+        
         const resAlunos = await fetch('/api/alunos');
+        if (!resAlunos.ok) throw new Error("Failed to fetch students");
         const dataAlunos = await resAlunos.json();
         setAlunos(dataAlunos.length > 0 ? dataAlunos : MOCK_ALUNOS);
         
         const resProf = await fetch('/api/professores');
+        if (!resProf.ok) throw new Error("Failed to fetch professors");
         const dataProf = await resProf.json();
         setProfessores(dataProf.length > 0 ? dataProf : MOCK_PROFESSORES);
 
         const resEv = await fetch('/api/eventos');
+        if (!resEv.ok) throw new Error("Failed to fetch events");
         const dataEv = await resEv.json();
         setEventos(dataEv.length > 0 ? dataEv : MOCK_EVENTOS);
 
         const resEsc = await fetch('/api/escalacoes');
+        if (!resEsc.ok) throw new Error("Failed to fetch lineups");
         const dataEsc = await resEsc.json();
         if (dataEsc.length > 0) {
           const formattedEsc: Record<string, string[]> = {};
@@ -391,12 +473,14 @@ export default function App() {
         }
 
         const resSettings = await fetch('/api/settings');
+        if (!resSettings.ok) throw new Error("Failed to fetch settings");
         const dataSettings = await resSettings.json();
         if (dataSettings.clubShield) setClubShield(dataSettings.clubShield);
         if (dataSettings.instagramLink) setInstagramLink(dataSettings.instagramLink);
         if (dataSettings.whatsappLink) setWhatsappLink(dataSettings.whatsappLink);
       } catch (error) {
         console.error("Error fetching data:", error);
+        setLoginError("Erro de conexão com o servidor. Verifique se o backend está rodando.");
         setAlunos(MOCK_ALUNOS);
       }
     };
@@ -445,6 +529,16 @@ export default function App() {
     }
     if (aluno.responsavelRgCpf) {
       aluno.responsavelRgCpf = aluno.responsavelRgCpf.replace(/\D/g, '');
+    }
+
+    // Normalize Date and Calculate Age
+    if (aluno.dataNascimento && aluno.dataNascimento.includes('-')) {
+      const [y, m, d] = aluno.dataNascimento.split('-');
+      aluno.dataNascimento = `${d}/${m}/${y}`;
+      
+      const birthYear = parseInt(y);
+      const currentYear = new Date().getFullYear();
+      aluno.idade = currentYear - birthYear;
     }
 
     try {
@@ -786,7 +880,7 @@ export default function App() {
     return alunos.filter(a => a.nome.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [searchQuery, alunos]);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isRegistering) {
     return (
       <Login 
         onLogin={handleLogin} 
@@ -795,7 +889,169 @@ export default function App() {
         setUsername={setUsername}
         password={password}
         setPassword={setPassword}
+        setIsRegistering={setIsRegistering}
       />
+    );
+  }
+
+  if (isRegistering) {
+    return (
+      <div className="min-h-screen bg-zinc-950 p-4 md:p-8 overflow-y-auto">
+        <div className="max-w-5xl mx-auto">
+          <button 
+            onClick={() => setIsRegistering(false)}
+            className="flex items-center gap-2 text-zinc-500 hover:text-yellow-400 transition-all text-xs font-bold uppercase mb-8"
+          >
+            <ChevronLeft size={16} /> Voltar para o Login
+          </button>
+
+          <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <UserPlus className="text-yellow-400" /> Auto-Cadastro de Atleta
+              </h3>
+              <div className="bg-yellow-400/10 border border-yellow-400/20 p-3 rounded-xl">
+                <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest leading-tight">
+                  Importante: Seu CPF será seu Login e sua Senha inicial.
+                </p>
+              </div>
+            </div>
+
+            <form className="space-y-8" onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const alunoData: any = {
+                id: Date.now().toString(),
+                nome: formData.get('nome'),
+                dataNascimento: formData.get('dataNascimento'),
+                rgCpf: formData.get('rgCpf'),
+                telefone: formData.get('telefone'),
+                categoria: formCategoria,
+                endereco: formData.get('endereco'),
+                bairro: formData.get('bairro'),
+                cidade: formData.get('cidade'),
+                uf: formData.get('uf'),
+                responsavel: formData.get('responsavel'),
+                responsavelRgCpf: formData.get('responsavelRgCpf'),
+                telefoneResponsavel: formData.get('telefoneResponsavel'),
+                foto: photoPreview
+              };
+              
+              if (!alunoData.rgCpf) {
+                alert('O CPF é obrigatório para o cadastro.');
+                return;
+              }
+
+              await handleSaveAluno(alunoData);
+              setIsRegistering(false);
+              alert('Cadastro realizado com sucesso! Agora você pode entrar usando seu CPF como login e senha.');
+            }}>
+              {/* Reuse the same form fields as in the main app */}
+              <div className="space-y-6">
+                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Dados do Aluno</h4>
+                
+                <div className="flex flex-col md:flex-row gap-8 items-start">
+                  <div className="shrink-0 space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase block">Foto 3x4</label>
+                    <div className="relative group">
+                      <div className={cn(
+                        "w-32 h-40 bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
+                        photoPreview && "border-solid border-yellow-400"
+                      )}>
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="text-center p-4">
+                            <IdCard className="text-zinc-600 mx-auto mb-2" size={32} />
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase leading-tight">Clique para subir</p>
+                          </div>
+                        )}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handlePhotoChange}
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">Nome Completo</label>
+                      <input name="nome" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Nome completo" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">Data de Nascimento</label>
+                      <input name="dataNascimento" type="date" required onChange={handleBirthDateChange} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF</label>
+                      <input name="rgCpf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="000.000.000-00" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">Telefone</label>
+                      <input name="telefone" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="(00) 00000-0000" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">Categoria</label>
+                      <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none">
+                        {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Endereço</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">Endereço Completo</label>
+                    <input name="endereco" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Rua, número, complemento" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">Bairro</label>
+                    <input name="bairro" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Bairro" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">Cidade</label>
+                    <input name="cidade" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Cidade" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">UF</label>
+                    <input name="uf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Estado" maxLength={2} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Dados do Responsável</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">Nome do Responsável</label>
+                    <input name="responsavel" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Nome completo" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF do Responsável</label>
+                    <input name="responsavelRgCpf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="000.000.000-00" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase">Telefone do Responsável</label>
+                    <input name="telefoneResponsavel" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="(00) 00000-0000" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6">
+                <button type="submit" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
+                  Finalizar Meu Cadastro
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     );
   }
 
