@@ -57,7 +57,8 @@ async function startServer() {
       bairro TEXT,
       cidade TEXT,
       uf TEXT,
-      foto TEXT
+      foto TEXT,
+      status TEXT DEFAULT 'ativo'
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -131,6 +132,13 @@ async function startServer() {
       FOREIGN KEY(alunoId) REFERENCES alunos(id)
     );
   `);
+
+  // Migration for existing databases
+  try {
+    await db.run("ALTER TABLE alunos ADD COLUMN status TEXT DEFAULT 'ativo'");
+  } catch (e) {
+    // Column might already exist
+  }
 
   // Initialize default admin if empty
   const adminExists = await db.get("SELECT * FROM users WHERE username = '05504043689'");
@@ -253,9 +261,9 @@ async function startServer() {
       const existingSqlite = await db.get("SELECT * FROM alunos WHERE rgCpf = ? AND id != ?", [aluno.rgCpf, aluno.id]);
       if (!existingSqlite) {
         await db.run(
-          `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto]
+          `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto, status) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto, aluno.status || 'ativo']
         );
 
         if (aluno.rgCpf) {
@@ -364,6 +372,18 @@ async function startServer() {
       const stmt = await db.prepare("INSERT INTO presencas (alunoId, data, status) VALUES (?, ?, ?)");
       for (const item of lista) {
         await stmt.run([item.alunoId, data, item.status]);
+        
+        // Logic for active/inactive status
+        if (item.status === 'presente') {
+          await db.run("UPDATE alunos SET status = 'ativo' WHERE id = ?", [item.alunoId]);
+          if (supabase) await supabase.from('alunos').update({ status: 'ativo' }).eq('id', item.alunoId);
+        } else if (item.status === 'falta') {
+          const last4 = await db.all("SELECT status FROM presencas WHERE alunoId = ? ORDER BY data DESC LIMIT 4", [item.alunoId]);
+          if (last4.length >= 4 && last4.every(p => p.status === 'falta')) {
+            await db.run("UPDATE alunos SET status = 'inativo' WHERE id = ?", [item.alunoId]);
+            if (supabase) await supabase.from('alunos').update({ status: 'inativo' }).eq('id', item.alunoId);
+          }
+        }
       }
       await stmt.finalize();
       

@@ -42,7 +42,9 @@ import {
   LogOut,
   UserCheck,
   BarChart3,
-  Cake
+  Cake,
+  ClipboardCheck,
+  CalendarPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -93,6 +95,7 @@ interface Aluno {
   cidade?: string;
   uf?: string;
   foto?: string;
+  status?: 'ativo' | 'inativo';
 }
 
 interface Professor {
@@ -199,7 +202,7 @@ const MOCK_EVENTOS: Evento[] = [
   }
 ];
 
-const CATEGORIAS = ['Sub-7', 'Sub-9', 'Sub-11', 'Sub-13', 'Sub-15', 'Sub-17'];
+const CATEGORIAS = ['Sub-7', 'Sub-9', 'Sub-11', 'Sub-13', 'Sub-15', 'Sub-17', 'Sub-Adulto'];
 
 // URL do Escudo Oficial do Piruá E.C. (Fênix + Jogador - Versão Final Fiel à Imagem)
 const ESCUDO_URL = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -448,22 +451,22 @@ export default function App() {
         const resAlunos = await fetch('/api/alunos');
         if (!resAlunos.ok) throw new Error("Failed to fetch students");
         const dataAlunos = await resAlunos.json();
-        setAlunos(dataAlunos.length > 0 ? dataAlunos : MOCK_ALUNOS);
+        setAlunos(Array.isArray(dataAlunos) && dataAlunos.length > 0 ? dataAlunos : MOCK_ALUNOS);
         
         const resProf = await fetch('/api/professores');
         if (!resProf.ok) throw new Error("Failed to fetch professors");
         const dataProf = await resProf.json();
-        setProfessores(dataProf.length > 0 ? dataProf : MOCK_PROFESSORES);
+        setProfessores(Array.isArray(dataProf) && dataProf.length > 0 ? dataProf : MOCK_PROFESSORES);
 
         const resEv = await fetch('/api/eventos');
         if (!resEv.ok) throw new Error("Failed to fetch events");
         const dataEv = await resEv.json();
-        setEventos(dataEv.length > 0 ? dataEv : MOCK_EVENTOS);
+        setEventos(Array.isArray(dataEv) && dataEv.length > 0 ? dataEv : MOCK_EVENTOS);
 
         const resEsc = await fetch('/api/escalacoes');
         if (!resEsc.ok) throw new Error("Failed to fetch lineups");
         const dataEsc = await resEsc.json();
-        if (dataEsc.length > 0) {
+        if (Array.isArray(dataEsc) && dataEsc.length > 0) {
           const formattedEsc: Record<string, string[]> = {};
           dataEsc.forEach((esc: any) => {
             if (!formattedEsc[esc.eventoId]) formattedEsc[esc.eventoId] = [];
@@ -538,7 +541,17 @@ export default function App() {
       
       const birthYear = parseInt(y);
       const currentYear = new Date().getFullYear();
-      aluno.idade = currentYear - birthYear;
+      const age = currentYear - birthYear;
+      aluno.idade = age;
+
+      // Auto-calculate category
+      if (age <= 7) aluno.categoria = 'Sub-7';
+      else if (age <= 9) aluno.categoria = 'Sub-9';
+      else if (age <= 11) aluno.categoria = 'Sub-11';
+      else if (age <= 13) aluno.categoria = 'Sub-13';
+      else if (age <= 15) aluno.categoria = 'Sub-15';
+      else if (age <= 17) aluno.categoria = 'Sub-17';
+      else aluno.categoria = 'Sub-Adulto';
     }
 
     try {
@@ -575,13 +588,20 @@ export default function App() {
 
   const handleSaveSetting = async (key: string, value: string) => {
     try {
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
       });
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error(`Error saving setting ${key}:`, errorData);
+        return false;
+      }
+      return true;
     } catch (error) {
       console.error("Error saving setting:", error);
+      return false;
     }
   };
 
@@ -768,6 +788,12 @@ export default function App() {
       });
       if (res.ok) {
         alert('Chamada salva com sucesso!');
+        // Refresh students to get updated status
+        const resAlunos = await fetch('/api/alunos');
+        if (resAlunos.ok) {
+          const dataAlunos = await resAlunos.json();
+          setAlunos(dataAlunos);
+        }
       }
     } catch (error) {
       console.error("Error saving attendance:", error);
@@ -833,7 +859,7 @@ export default function App() {
     if (age <= 13) return 'Sub-13';
     if (age <= 15) return 'Sub-15';
     if (age <= 17) return 'Sub-17';
-    return 'Sub-17';
+    return 'Sub-Adulto';
   };
 
   const handleBirthDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -843,8 +869,12 @@ export default function App() {
   };
 
   const handleSaveShield = async () => {
-    await handleSaveSetting('clubShield', clubShield);
-    alert('Brasão salvo com sucesso!');
+    const success = await handleSaveSetting('clubShield', clubShield);
+    if (success) {
+      alert('Brasão salvo com sucesso!');
+    } else {
+      alert('Erro ao salvar brasão. Verifique o tamanho da imagem ou tente novamente.');
+    }
   };
 
   const handleShieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1318,31 +1348,170 @@ export default function App() {
 
             {currentView === 'dashboard' && userRole === 'admin' && (
               <div className="space-y-8">
-                <div className="bg-zinc-900 p-10 rounded-3xl border border-zinc-800 shadow-xl flex flex-col md:flex-row items-center gap-8">
-                  <div className="w-32 h-32 shrink-0">
+                <div className="bg-zinc-900 p-10 rounded-3xl border border-zinc-800 shadow-xl flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+                  <div className="w-32 h-32 shrink-0 relative z-10">
                     <img src={currentShield} alt="Escudo Piruá" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                   </div>
-                  <div>
+                  <div className="relative z-10">
                     <h3 className="text-3xl font-black text-yellow-400 uppercase tracking-tight mb-2">Bem-vindo ao Piruá E.C.</h3>
                     <p className="text-zinc-400 max-w-xl">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
-                    <Users className="text-yellow-400 mb-4" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">142</h3>
+                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
+                    <Users className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
+                    <h3 className="text-4xl font-black text-zinc-100">{alunos.filter(a => a.status !== 'inativo').length}</h3>
                     <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Alunos Ativos</p>
                   </div>
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
-                    <CalendarDays className="text-yellow-400 mb-4" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">08</h3>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Eventos este mês</p>
+                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
+                    <CalendarDays className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
+                    <h3 className="text-4xl font-black text-zinc-100">{eventos.length}</h3>
+                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Eventos Cadastrados</p>
                   </div>
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
-                    <ShieldAlert className="text-yellow-400 mb-4" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">12</h3>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Anamneses Pendentes</p>
+                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
+                    <ShieldAlert className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
+                    <h3 className="text-4xl font-black text-zinc-100">{alunos.filter(a => a.status === 'inativo').length}</h3>
+                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Alunos Inativos</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Aniversariantes do Dia */}
+                  <div className="bg-zinc-900 p-8 rounded-3xl border-2 border-yellow-400/30 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                      <Cake size={80} />
+                    </div>
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                      <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight">
+                        <Cake className="text-yellow-400" size={20} /> Aniversariantes de Hoje
+                      </h3>
+                      <button 
+                        onClick={() => setCurrentView('aniversariantes')}
+                        className="text-[10px] font-black text-yellow-400 uppercase tracking-widest hover:underline"
+                      >
+                        Ver Calendário
+                      </button>
+                    </div>
+                    <div className="space-y-4 relative z-10">
+                      {alunos.filter(aluno => {
+                        if (!aluno.dataNascimento) return false;
+                        const parts = aluno.dataNascimento.split('/');
+                        if (parts.length < 2) return false;
+                        const today = new Date();
+                        return parseInt(parts[0]) === today.getDate() && parseInt(parts[1]) === (today.getMonth() + 1);
+                      }).length > 0 ? (
+                        alunos.filter(aluno => {
+                          if (!aluno.dataNascimento) return false;
+                          const parts = aluno.dataNascimento.split('/');
+                          const today = new Date();
+                          return parseInt(parts[0]) === today.getDate() && parseInt(parts[1]) === (today.getMonth() + 1);
+                        }).slice(0, 3).map(aluno => (
+                          <div key={aluno.id} className="flex items-center justify-between p-4 bg-yellow-400/10 rounded-2xl border border-yellow-400/20 group hover:bg-yellow-400/20 transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center text-black font-black">
+                                {aluno.nome.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-100">{aluno.nome}</p>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{aluno.categoria}</p>
+                              </div>
+                            </div>
+                            <Trophy className="text-yellow-400 animate-bounce" size={18} />
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-12 text-center text-zinc-500 bg-zinc-800/20 rounded-2xl border border-dashed border-zinc-800 text-xs italic">
+                          Nenhum aniversariante hoje. Que tal planejar o próximo treino?
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Próximos Eventos */}
+                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                      <Trophy size={80} />
+                    </div>
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                      <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight">
+                        <Trophy className="text-yellow-400" size={20} /> Próximos Eventos
+                      </h3>
+                      <button 
+                        onClick={() => setCurrentView('eventos')}
+                        className="text-[10px] font-black text-yellow-400 uppercase tracking-widest hover:underline"
+                      >
+                        Ver Agenda
+                      </button>
+                    </div>
+                    <div className="space-y-4 relative z-10">
+                      {eventos.length > 0 ? (
+                        eventos.slice(0, 3).map(evento => (
+                          <div key={evento.id} className="flex items-center justify-between p-4 bg-zinc-800/30 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex flex-col items-center justify-center text-yellow-400 leading-none">
+                                <span className="text-[10px] font-black">
+                                  {evento.dataInicio && evento.dataInicio.includes('-') ? evento.dataInicio.split('-')[2] : '--'}
+                                </span>
+                                <span className="text-[8px] font-bold uppercase">
+                                  {evento.dataInicio ? new Date(evento.dataInicio).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') : '---'}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-100">{evento.nome}</p>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{evento.cidade} - {evento.uf}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-black text-yellow-400">{evento.horario}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-12 text-center text-zinc-500 bg-zinc-800/20 rounded-2xl border border-dashed border-zinc-800 text-xs italic">
+                          Nenhum evento programado. Aproveite para organizar um amistoso!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações Rápidas */}
+                <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
+                  <h3 className="text-lg font-bold mb-6 uppercase tracking-tight">Ações Rápidas</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <button 
+                      onClick={() => {
+                        setSelectedAluno(null);
+                        setCurrentView('cadastrar_aluno');
+                      }}
+                      className="flex flex-col items-center justify-center p-6 bg-zinc-800/50 rounded-2xl border border-zinc-800 hover:border-yellow-400/50 hover:bg-zinc-800 transition-all group"
+                    >
+                      <UserPlus className="text-yellow-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
+                      <span className="text-xs font-black uppercase tracking-widest">Novo Aluno</span>
+                    </button>
+                    <button 
+                      onClick={() => setCurrentView('chamada')}
+                      className="flex flex-col items-center justify-center p-6 bg-zinc-800/50 rounded-2xl border border-zinc-800 hover:border-yellow-400/50 hover:bg-zinc-800 transition-all group"
+                    >
+                      <ClipboardCheck className="text-yellow-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
+                      <span className="text-xs font-black uppercase tracking-widest">Fazer Chamada</span>
+                    </button>
+                    <button 
+                      onClick={() => setCurrentView('eventos')}
+                      className="flex flex-col items-center justify-center p-6 bg-zinc-800/50 rounded-2xl border border-zinc-800 hover:border-yellow-400/50 hover:bg-zinc-800 transition-all group"
+                    >
+                      <CalendarPlus className="text-yellow-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
+                      <span className="text-xs font-black uppercase tracking-widest">Novo Evento</span>
+                    </button>
+                    <button 
+                      onClick={() => setCurrentView('relatorios')}
+                      className="flex flex-col items-center justify-center p-6 bg-zinc-800/50 rounded-2xl border border-zinc-800 hover:border-yellow-400/50 hover:bg-zinc-800 transition-all group"
+                    >
+                      <FileText className="text-yellow-400 mb-2 group-hover:scale-110 transition-transform" size={24} />
+                      <span className="text-xs font-black uppercase tracking-widest">Relatórios</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2065,7 +2234,13 @@ export default function App() {
               <div className="bg-zinc-900 rounded-3xl border border-zinc-800 shadow-xl overflow-hidden">
                 <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
                   <h3 className="text-lg font-bold">Listagem Geral</h3>
-                  <button className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 rounded-xl text-xs font-black hover:bg-yellow-500 transition-colors uppercase">
+                  <button 
+                    onClick={() => {
+                      setSelectedAluno(null);
+                      setCurrentView('cadastrar_aluno');
+                    }}
+                    className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 rounded-xl text-xs font-black hover:bg-yellow-500 transition-colors uppercase"
+                  >
                     <Plus size={16} /> Adicionar
                   </button>
                 </div>
@@ -2077,6 +2252,7 @@ export default function App() {
                         <th className="px-6 py-4">Categoria</th>
                         <th className="px-6 py-4">Nascimento</th>
                         <th className="px-6 py-4">Responsável</th>
+                        <th className="px-6 py-4">Status</th>
                         <th className="px-6 py-4"></th>
                       </tr>
                     </thead>
@@ -2101,6 +2277,16 @@ export default function App() {
                           </td>
                           <td className="px-6 py-4 text-xs text-zinc-400">{aluno.dataNascimento}</td>
                           <td className="px-6 py-4 text-xs text-zinc-400">{aluno.responsavel}</td>
+                          <td className="px-6 py-4">
+                            <span className={cn(
+                              "text-[10px] font-black px-2 py-1 rounded-md border uppercase",
+                              aluno.status === 'inativo' 
+                                ? "bg-rose-500/10 text-rose-500 border-rose-500/20" 
+                                : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                            )}>
+                              {aluno.status || 'ativo'}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
                               <button 
@@ -3000,7 +3186,9 @@ export default function App() {
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Nome do Evento</label>
                       <input 
+                        name="nome"
                         type="text" 
+                        required
                         placeholder="Ex: Torneio Regional, Amistoso..."
                         className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                       />
@@ -3010,7 +3198,9 @@ export default function App() {
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Endereço do Evento</label>
                         <input 
+                          name="endereco"
                           type="text" 
+                          required
                           placeholder="Rua, número, estádio ou ginásio"
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                         />
@@ -3018,7 +3208,9 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Cidade do Evento</label>
                         <input 
+                          name="cidade"
                           type="text" 
+                          required
                           placeholder="Cidade"
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                         />
@@ -3026,7 +3218,9 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">UF</label>
                         <input 
+                          name="uf"
                           type="text" 
+                          required
                           placeholder="Estado"
                           maxLength={2}
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all uppercase" 
@@ -3038,28 +3232,34 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Data de Início</label>
                         <input 
+                          name="dataInicio"
                           type="date" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Data de Fim</label>
                         <input 
+                          name="dataFim"
                           type="date" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Horário</label>
                         <input 
+                          name="horario"
                           type="time" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
                         />
                       </div>
                     </div>
 
                     <div className="pt-4">
-                      <button type="button" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
+                      <button type="submit" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
                         Salvar Evento
                       </button>
                     </div>
