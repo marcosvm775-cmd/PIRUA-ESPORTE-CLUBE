@@ -24,6 +24,7 @@ import {
   Bell,
   Plus,
   Trash2,
+  Edit,
   Download,
   Printer,
   Save,
@@ -548,21 +549,16 @@ export default function App() {
     // Normalize Date and Calculate Age
     if (aluno.dataNascimento && aluno.dataNascimento.includes('-')) {
       const [y, m, d] = aluno.dataNascimento.split('-');
-      aluno.dataNascimento = `${d}/${m}/${y}`;
       
       const birthYear = parseInt(y);
       const currentYear = new Date().getFullYear();
       const age = currentYear - birthYear;
       aluno.idade = age;
 
-      // Auto-calculate category
-      if (age <= 7) aluno.categoria = 'Sub-7';
-      else if (age <= 9) aluno.categoria = 'Sub-9';
-      else if (age <= 11) aluno.categoria = 'Sub-11';
-      else if (age <= 13) aluno.categoria = 'Sub-13';
-      else if (age <= 15) aluno.categoria = 'Sub-15';
-      else if (age <= 17) aluno.categoria = 'Sub-17';
-      else aluno.categoria = 'Sub-Adulto';
+      // Auto-calculate category BEFORE changing format
+      aluno.categoria = calculateCategory(aluno.dataNascimento);
+      
+      aluno.dataNascimento = `${d}/${m}/${y}`;
     }
 
     try {
@@ -617,6 +613,8 @@ export default function App() {
   };
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   const handleSyncSupabase = async () => {
     if (!window.confirm('Isso irá enviar todos os dados locais (SQLite) para o Supabase. Deseja continuar?')) return;
     
@@ -876,6 +874,17 @@ export default function App() {
   const [showDocPreview, setShowDocPreview] = useState(false);
   const [eventAttendance, setEventAttendance] = useState<Record<string, 'confirmado' | 'ausente' | 'pendente'>>({});
   const [formCategoria, setFormCategoria] = useState<string>('Sub-11');
+
+  useEffect(() => {
+    if (currentView === 'meu_perfil' && loggedInAluno) {
+      setFormCategoria(loggedInAluno.categoria);
+    } else if (selectedAluno) {
+      setFormCategoria(selectedAluno.categoria);
+    } else {
+      setFormCategoria('Sub-11');
+    }
+  }, [selectedAluno, loggedInAluno, currentView]);
+
   const [escalacaoEventoId, setEscalacaoEventoId] = useState<string>('');
   const [escalacaoEventoNome, setEscalacaoEventoNome] = useState('');
 
@@ -883,7 +892,9 @@ export default function App() {
 
   const calculateCategory = (birthDate: string) => {
     if (!birthDate) return 'Sub-11';
-    const birthYear = new Date(birthDate).getFullYear();
+    
+    // Use split to get the year directly from the YYYY-MM-DD string to avoid timezone issues
+    const birthYear = parseInt(birthDate.split('-')[0]);
     const currentYear = new Date().getFullYear();
     const age = currentYear - birthYear;
 
@@ -1120,15 +1131,29 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-zinc-950 font-sans text-zinc-100 overflow-hidden">
+    <div className="flex h-screen bg-zinc-950 font-sans text-zinc-100 overflow-hidden relative">
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <aside className={cn(
-        "bg-zinc-900 border-r border-zinc-800 flex flex-col p-6 shrink-0 transition-all duration-300 relative",
-        isSidebarCollapsed ? "w-20 p-4" : "w-72"
+        "bg-zinc-900 border-r border-zinc-800 flex flex-col p-6 shrink-0 transition-all duration-300 relative z-[70] lg:static fixed inset-y-0 left-0",
+        isSidebarCollapsed ? "w-20 p-4" : "w-72",
+        !isMobileMenuOpen && "-translate-x-full lg:translate-x-0"
       )}>
         <button 
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="absolute -right-3 top-10 bg-yellow-400 text-black rounded-full p-1 shadow-lg z-50 hover:scale-110 transition-transform"
+          className="absolute -right-3 top-10 bg-yellow-400 text-black rounded-full p-1 shadow-lg z-50 hover:scale-110 transition-transform hidden lg:block"
         >
           {isSidebarCollapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -1143,6 +1168,12 @@ export default function App() {
               <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">Esporte Clube</p>
             </motion.div>
           )}
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="lg:hidden ml-auto text-zinc-500 hover:text-yellow-400"
+          >
+            <X size={24} />
+          </button>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -1176,98 +1207,98 @@ export default function App() {
                 icon={LayoutDashboard} 
                 label="Início" 
                 active={currentView === 'dashboard'} 
-                onClick={() => setCurrentView('dashboard')} 
+                onClick={() => { setCurrentView('dashboard'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={UserPlus} 
                 label="Cadastrar Aluno" 
                 active={currentView === 'cadastrar_aluno'} 
-                onClick={() => setCurrentView('cadastrar_aluno')} 
+                onClick={() => { setCurrentView('cadastrar_aluno'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={ShieldCheck} 
                 label="Cadastrar Professor" 
                 active={currentView === 'cadastrar_professor'} 
-                onClick={() => setCurrentView('cadastrar_professor')} 
+                onClick={() => { setCurrentView('cadastrar_professor'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Users} 
                 label="Lista Geral de Alunos" 
                 active={currentView === 'lista_alunos'} 
-                onClick={() => setCurrentView('lista_alunos')} 
+                onClick={() => { setCurrentView('lista_alunos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Cake} 
                 label="Aniversariantes" 
                 active={currentView === 'aniversariantes'} 
-                onClick={() => setCurrentView('aniversariantes')} 
+                onClick={() => { setCurrentView('aniversariantes'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={CheckSquare} 
                 label="Chamada de Presença" 
                 active={currentView === 'chamada'} 
-                onClick={() => setCurrentView('chamada')} 
+                onClick={() => { setCurrentView('chamada'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={BarChart3} 
                 label="Relatórios" 
                 active={currentView === 'relatorios'} 
-                onClick={() => setCurrentView('relatorios')} 
+                onClick={() => { setCurrentView('relatorios'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={CalendarDays} 
                 label="Cadastrar Eventos" 
                 active={currentView === 'eventos'} 
-                onClick={() => setCurrentView('eventos')} 
+                onClick={() => { setCurrentView('eventos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={ClipboardList} 
                 label="Ficha de Anamnese" 
                 active={currentView === 'anamnese'} 
-                onClick={() => setCurrentView('anamnese')} 
+                onClick={() => { setCurrentView('anamnese'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={FileText} 
                 label="Gerar Documento" 
                 active={currentView === 'documentos'} 
-                onClick={() => setCurrentView('documentos')} 
+                onClick={() => { setCurrentView('documentos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Settings} 
                 label="Configurações" 
                 active={currentView === 'configuracoes'} 
-                onClick={() => setCurrentView('configuracoes')} 
+                onClick={() => { setCurrentView('configuracoes'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={IdCard} 
                 label="Carteirinha" 
                 active={currentView === 'carteirinha'} 
-                onClick={() => setCurrentView('carteirinha')} 
+                onClick={() => { setCurrentView('carteirinha'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Layers} 
                 label="Categorias Sub" 
                 active={currentView === 'categorias'} 
-                onClick={() => setCurrentView('categorias')} 
+                onClick={() => { setCurrentView('categorias'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Trophy} 
                 label="Escalação Evento" 
                 active={currentView === 'escalacao'} 
-                onClick={() => setCurrentView('escalacao')} 
+                onClick={() => { setCurrentView('escalacao'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
             </>
@@ -1277,35 +1308,35 @@ export default function App() {
                 icon={UserPlus} 
                 label="Cadastrar Aluno" 
                 active={currentView === 'cadastrar_aluno'} 
-                onClick={() => setCurrentView('cadastrar_aluno')} 
+                onClick={() => { setCurrentView('cadastrar_aluno'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={ClipboardList} 
                 label="Ficha de Anamnese" 
                 active={currentView === 'anamnese'} 
-                onClick={() => setCurrentView('anamnese')} 
+                onClick={() => { setCurrentView('anamnese'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={IdCard} 
                 label="Carteirinha" 
                 active={currentView === 'carteirinha'} 
-                onClick={() => setCurrentView('carteirinha')} 
+                onClick={() => { setCurrentView('carteirinha'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
               <SidebarItem 
                 icon={Trophy} 
                 label="Lista de Presença Evento" 
                 active={currentView === 'escalacao'} 
-                onClick={() => setCurrentView('escalacao')} 
+                onClick={() => { setCurrentView('escalacao'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
               />
             </>
           )}
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-zinc-800 space-y-4">
+        <div className="pt-6 border-t border-zinc-800 space-y-4">
           <div className={cn("flex items-center gap-3 px-2", isSidebarCollapsed && "justify-center px-0")}>
             <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center shrink-0">
               <UserCircle className="text-black" size={24} />
@@ -1331,27 +1362,35 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-8 relative">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
         {/* Header */}
-        <header className="flex justify-between items-center mb-10">
-          <div>
-            <h2 className="text-3xl font-black text-zinc-100 uppercase tracking-tight">
-              {currentView === 'meu_perfil' ? 'Meu Perfil' : 
-               currentView === 'presenca_evento' ? 'Presença em Evento' : 
-               currentView === 'cadastrar_professor' ? 'Cadastrar Professor' :
-               currentView.replace('_', ' ')}
-            </h2>
-            <p className="text-zinc-500 mt-1">Gestão Piruá Esporte Clube • {new Date().toLocaleDateString('pt-BR')}</p>
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400"
+            >
+              <Menu size={24} />
+            </button>
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black text-zinc-100 uppercase tracking-tight">
+                {currentView === 'meu_perfil' ? 'Meu Perfil' : 
+                 currentView === 'presenca_evento' ? 'Presença em Evento' : 
+                 currentView === 'cadastrar_professor' ? 'Cadastrar Professor' :
+                 currentView.replace('_', ' ')}
+              </h2>
+              <p className="text-zinc-500 text-xs md:text-sm mt-1">Gestão Piruá Esporte Clube • {new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="relative flex-1 md:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
               <input 
                 type="text" 
                 placeholder="Buscar..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-64 transition-all text-sm"
+                className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-full md:w-64 transition-all text-sm"
               />
             </div>
             <button className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400 relative">
@@ -1980,7 +2019,7 @@ export default function App() {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   const alunoData: any = {
-                    id: currentView === 'meu_perfil' ? loggedInAluno?.id : Date.now().toString(),
+                    id: currentView === 'meu_perfil' ? loggedInAluno?.id : (selectedAluno?.id || Date.now().toString()),
                     nome: formData.get('nome'),
                     dataNascimento: formData.get('dataNascimento'),
                     rgCpf: formData.get('rgCpf'),
@@ -2045,7 +2084,11 @@ export default function App() {
                           <input 
                             name="dataNascimento"
                             type="date" 
-                            defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.dataNascimento.split('/').reverse().join('-') : ''}
+                            defaultValue={
+                              currentView === 'meu_perfil' 
+                                ? loggedInAluno?.dataNascimento?.split('/').reverse().join('-') 
+                                : (selectedAluno?.dataNascimento?.split('/').reverse().join('-') || '')
+                            }
                             onChange={handleBirthDateChange}
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
                           />
@@ -2250,7 +2293,9 @@ export default function App() {
                         <div className="md:col-span-2 space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Nome Completo</label>
                           <input 
+                            name="nome"
                             type="text" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                             placeholder="Nome completo do professor" 
                           />
@@ -2258,14 +2303,18 @@ export default function App() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Data de Nascimento</label>
                           <input 
+                            name="dataNascimento"
                             type="date" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF</label>
                           <input 
+                            name="rgCpf"
                             type="text" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                             placeholder="000.000.000-00" 
                           />
@@ -2273,7 +2322,9 @@ export default function App() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">CREF (Registro Profissional)</label>
                           <input 
+                            name="cref"
                             type="text" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                             placeholder="000000-G/UF" 
                           />
@@ -2281,6 +2332,7 @@ export default function App() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Especialidade / Cargo</label>
                           <select 
+                            name="especialidade"
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none"
                           >
                             <option>Treinador Principal</option>
@@ -2294,7 +2346,9 @@ export default function App() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Telefone de Contato</label>
                           <input 
+                            name="telefone"
                             type="text" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                             placeholder="(00) 00000-0000" 
                           />
@@ -2302,7 +2356,9 @@ export default function App() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">E-mail Profissional</label>
                           <input 
+                            name="email"
                             type="email" 
+                            required
                             className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                             placeholder="email@pirua.com" 
                           />
@@ -2318,7 +2374,9 @@ export default function App() {
                       <div className="md:col-span-2 space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">Endereço Completo</label>
                         <input 
+                          name="endereco"
                           type="text" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                           placeholder="Rua, número, complemento" 
                         />
@@ -2326,7 +2384,9 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">Bairro</label>
                         <input 
+                          name="bairro"
                           type="text" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                           placeholder="Bairro" 
                         />
@@ -2334,7 +2394,9 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">Cidade</label>
                         <input 
+                          name="cidade"
                           type="text" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                           placeholder="Cidade" 
                         />
@@ -2342,7 +2404,9 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">UF</label>
                         <input 
+                          name="uf"
                           type="text" 
+                          required
                           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none" 
                           placeholder="Estado" 
                           maxLength={2} 
@@ -2352,7 +2416,7 @@ export default function App() {
                   </div>
 
                   <div className="pt-6">
-                    <button type="button" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
+                    <button type="submit" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
                       Finalizar Cadastro do Professor
                     </button>
                   </div>
@@ -2420,14 +2484,21 @@ export default function App() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
                               <button 
+                                onClick={() => {
+                                  setSelectedAluno(aluno);
+                                  setCurrentView('cadastrar_aluno');
+                                }}
+                                className="p-2 text-zinc-500 hover:text-yellow-400 transition-all"
+                                title="Editar Aluno"
+                              >
+                                <Edit size={18} />
+                              </button>
+                              <button 
                                 onClick={() => handleDeleteAluno(aluno.id)}
                                 className="p-2 text-zinc-500 hover:text-red-400 transition-all"
                                 title="Excluir Aluno"
                               >
                                 <Trash2 size={18} />
-                              </button>
-                              <button className="p-2 text-zinc-500 hover:text-yellow-400 transition-all">
-                                <MoreVertical size={18} />
                               </button>
                             </div>
                           </td>
