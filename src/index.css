@@ -5,10 +5,10 @@
     body * {
       visibility: hidden;
     }
-    #printable-doc, #printable-doc * {
+    .print-content, .print-content * {
       visibility: visible;
     }
-    #printable-doc {
+    .print-content {
       position: absolute;
       left: 0;
       top: 0;
@@ -16,6 +16,16 @@
       padding: 0;
       margin: 0;
       box-shadow: none;
+      background: white !important;
+      color: black !important;
+    }
+    .print-content * {
+      background: transparent !important;
+      color: black !important;
+      border-color: #eee !important;
+    }
+    .print-hidden {
+      display: none !important;
     }
   }
 }

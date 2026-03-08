@@ -96,6 +96,7 @@ interface Aluno {
   uf?: string;
   foto?: string;
   status?: 'ativo' | 'inativo';
+  numeroCamisa?: string;
 }
 
 interface Professor {
@@ -443,10 +444,16 @@ export default function App() {
   const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (retries = 3) => {
       try {
         const healthRes = await fetch('/api/health');
-        if (!healthRes.ok) throw new Error("Server health check failed");
+        if (!healthRes.ok) {
+          if (retries > 0) {
+            setTimeout(() => fetchData(retries - 1), 2000);
+            return;
+          }
+          throw new Error("Server health check failed");
+        }
         
         const resAlunos = await fetch('/api/alunos');
         if (!resAlunos.ok) throw new Error("Failed to fetch students");
@@ -483,8 +490,12 @@ export default function App() {
         if (dataSettings.whatsappLink) setWhatsappLink(dataSettings.whatsappLink);
       } catch (error) {
         console.error("Error fetching data:", error);
-        setLoginError("Erro de conexão com o servidor. Verifique se o backend está rodando.");
-        setAlunos(MOCK_ALUNOS);
+        if (retries > 0) {
+          setTimeout(() => fetchData(retries - 1), 2000);
+        } else {
+          setLoginError("Erro de conexão com o servidor. Verifique se o backend está rodando.");
+          setAlunos(MOCK_ALUNOS);
+        }
       }
     };
     fetchData();
@@ -602,6 +613,30 @@ export default function App() {
     } catch (error) {
       console.error("Error saving setting:", error);
       return false;
+    }
+  };
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleSyncSupabase = async () => {
+    if (!window.confirm('Isso irá enviar todos os dados locais (SQLite) para o Supabase. Deseja continuar?')) return;
+    
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        let message = "Sincronização concluída!\n\n";
+        Object.entries(data.results).forEach(([table, result]) => {
+          message += `${table}: ${result}\n`;
+        });
+        alert(message);
+      } else {
+        alert('Erro na sincronização: ' + data.message);
+      }
+    } catch (error) {
+      alert('Erro ao conectar com o servidor para sincronização');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -753,21 +788,20 @@ export default function App() {
 
   const fetchAttendanceReport = async (type: 'date' | 'month') => {
     try {
-      const res = await fetch('/api/presencas');
-      let data = await res.json();
-      
+      let url = '/api/presencas';
       if (type === 'date') {
-        data = data.filter((p: any) => p.data === reportDate);
+        url += `?data=${reportDate}`;
       } else {
-        data = data.filter((p: any) => {
-          const pDate = new Date(p.data);
-          return (pDate.getMonth() + 1) === reportMonth && pDate.getFullYear() === reportYear;
-        });
+        url += `?mes=${reportMonth}&ano=${reportYear}`;
       }
       
-      setAttendanceReport(data);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch attendance report");
+      const data = await res.json();
+      setAttendanceReport(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching attendance report:", error);
+      setAttendanceReport([]);
     }
   };
 
@@ -1706,6 +1740,57 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="bg-emerald-500/10 p-6 rounded-2xl border border-emerald-500/20 text-center">
+                      <p className="text-3xl font-black text-emerald-500 mb-1">
+                        {attendanceReport.filter(p => p.status === 'presente').length}
+                      </p>
+                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Presenças</p>
+                    </div>
+                    <div className="bg-rose-500/10 p-6 rounded-2xl border border-rose-500/20 text-center">
+                      <p className="text-3xl font-black text-rose-500 mb-1">
+                        {attendanceReport.filter(p => p.status === 'falta').length}
+                      </p>
+                      <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Faltas</p>
+                    </div>
+                    <div className="bg-yellow-500/10 p-6 rounded-2xl border border-yellow-500/20 text-center">
+                      <p className="text-3xl font-black text-yellow-500 mb-1">
+                        {attendanceReport.filter(p => p.status === 'justificado').length}
+                      </p>
+                      <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">Justificadas</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-8">
+                    <h4 className="text-sm font-bold mb-4 uppercase tracking-widest text-zinc-500">Resumo por Aluno</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {alunos.filter(a => a.status !== 'inativo').map(aluno => {
+                        const alunoPresencas = attendanceReport.filter(p => p.alunoId === aluno.id);
+                        const total = alunoPresencas.length;
+                        const presentes = alunoPresencas.filter(p => p.status === 'presente').length;
+                        const percent = total > 0 ? Math.round((presentes / total) * 100) : 0;
+                        
+                        return (
+                          <div key={aluno.id} className="bg-zinc-800/30 p-4 rounded-2xl border border-zinc-800">
+                            <div className="flex justify-between items-center mb-2">
+                              <p className="text-xs font-bold text-zinc-100 truncate pr-2">{aluno.nome}</p>
+                              <span className="text-[10px] font-black text-yellow-400">{percent}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                              <div 
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-500",
+                                  percent >= 75 ? "bg-emerald-500" : percent >= 50 ? "bg-yellow-500" : "bg-rose-500"
+                                )}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -1848,6 +1933,40 @@ export default function App() {
                       </div>
                   </div>
                 </div>
+
+                <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 uppercase tracking-tight">
+                    <ShieldCheck className="text-yellow-400" /> Sincronização Cloud (Supabase)
+                  </h3>
+                  <div className="p-6 bg-zinc-800/30 rounded-2xl border border-zinc-800">
+                    <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+                      Utilize esta ferramenta para enviar todos os dados salvos localmente (SQLite) para o banco de dados na nuvem (Supabase). 
+                      Isso garante que seus dados estejam seguros e acessíveis de qualquer lugar.
+                    </p>
+                    <button 
+                      onClick={handleSyncSupabase}
+                      disabled={isSyncing}
+                      className={cn(
+                        "flex items-center gap-3 px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg",
+                        isSyncing 
+                          ? "bg-zinc-700 text-zinc-500 cursor-not-allowed" 
+                          : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
+                      )}
+                    >
+                      {isSyncing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Sincronizando...
+                        </>
+                      ) : (
+                        <>
+                          <Plane size={20} />
+                          Sincronizar com Supabase
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1867,6 +1986,7 @@ export default function App() {
                     rgCpf: formData.get('rgCpf'),
                     telefone: formData.get('telefone'),
                     categoria: formCategoria,
+                    numeroCamisa: formData.get('numeroCamisa'),
                     endereco: formData.get('endereco'),
                     bairro: formData.get('bairro'),
                     cidade: formData.get('cidade'),
@@ -1960,6 +2080,16 @@ export default function App() {
                           >
                             {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
                           </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase">Número da Camisa</label>
+                          <input 
+                            name="numeroCamisa"
+                            type="text" 
+                            defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.numeroCamisa : ''}
+                            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                            placeholder="Ex: 10" 
+                          />
                         </div>
                       </div>
                     </div>
@@ -2554,7 +2684,7 @@ export default function App() {
                                 "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-all",
                                 isSelected ? "bg-yellow-400 text-black" : "bg-zinc-700 text-zinc-400"
                               )}>
-                                {aluno.nome.charAt(0)}
+                                {aluno.numeroCamisa || aluno.nome.charAt(0)}
                               </div>
                               <div>
                                 <p className={cn("font-bold text-sm", isSelected ? "text-yellow-400" : "text-zinc-100")}>{aluno.nome}</p>
@@ -2617,7 +2747,7 @@ export default function App() {
                             <tbody>
                               {atletasDaCategoria.map((aluno, index) => (
                                 <tr key={aluno.id} className="border-b border-zinc-200">
-                                  <td className="py-3 text-sm font-bold">{index + 1}</td>
+                                  <td className="py-3 text-sm font-bold">{aluno.numeroCamisa || index + 1}</td>
                                   <td className="py-3 text-sm font-bold uppercase">{aluno.nome}</td>
                                   <td className="py-3 text-sm">{aluno.dataNascimento}</td>
                                   <td className="py-3 text-sm">{aluno.rgCpf || '---'}</td>
@@ -2982,7 +3112,12 @@ export default function App() {
                           <img src={currentShield} alt="Logo" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
                           <span className="text-black font-black text-[10px] tracking-tighter">PIRUÁ ESPORTE CLUBE</span>
                         </div>
-                        <div className="bg-black px-2 py-0.5 rounded text-[8px] font-black text-yellow-400 uppercase">Atleta</div>
+                        <div className="flex items-center gap-2">
+                          {selectedAluno.numeroCamisa && (
+                            <div className="bg-black px-2 py-0.5 rounded text-[8px] font-black text-white uppercase">Nº {selectedAluno.numeroCamisa}</div>
+                          )}
+                          <div className="bg-black px-2 py-0.5 rounded text-[8px] font-black text-yellow-400 uppercase">Atleta</div>
+                        </div>
                       </div>
 
                       <div className="mt-12 px-4 flex gap-4">

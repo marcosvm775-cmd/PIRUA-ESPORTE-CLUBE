@@ -13,13 +13,15 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
 
-const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+const supabase = (supabaseUrl.startsWith('http') && supabaseAnonKey.length > 0) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
 if (!supabase) {
-  console.warn("Supabase credentials missing. Running in SQLite-only mode.");
+  console.warn("Supabase credentials missing or invalid. Running in SQLite-only mode.");
 }
 
 async function startServer() {
@@ -29,8 +31,14 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date().toISOString() });
+  app.get("/api/health", async (req, res) => {
+    try {
+      await db.get("SELECT 1");
+      res.json({ status: "ok", database: "connected", time: new Date().toISOString() });
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(500).json({ status: "error", message: "Database connection failed" });
+    }
   });
 
   console.log("Initializing database...");
@@ -58,7 +66,8 @@ async function startServer() {
       cidade TEXT,
       uf TEXT,
       foto TEXT,
-      status TEXT DEFAULT 'ativo'
+      status TEXT DEFAULT 'ativo',
+      numeroCamisa TEXT
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -136,9 +145,10 @@ async function startServer() {
   // Migration for existing databases
   try {
     await db.run("ALTER TABLE alunos ADD COLUMN status TEXT DEFAULT 'ativo'");
-  } catch (e) {
-    // Column might already exist
-  }
+  } catch (e) {}
+  try {
+    await db.run("ALTER TABLE alunos ADD COLUMN numeroCamisa TEXT");
+  } catch (e) {}
 
   // Initialize default admin if empty
   const adminExists = await db.get("SELECT * FROM users WHERE username = '05504043689'");
@@ -261,9 +271,9 @@ async function startServer() {
       const existingSqlite = await db.get("SELECT * FROM alunos WHERE rgCpf = ? AND id != ?", [aluno.rgCpf, aluno.id]);
       if (!existingSqlite) {
         await db.run(
-          `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto, status) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto, aluno.status || 'ativo']
+          `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto, status, numeroCamisa) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto, aluno.status || 'ativo', aluno.numeroCamisa]
         );
 
         if (aluno.rgCpf) {
@@ -518,7 +528,34 @@ async function startServer() {
     }
   });
 
+  app.post("/api/sync", async (req, res) => {
+    if (!supabase) {
+      return res.status(400).json({ success: false, message: "Supabase não configurado" });
+    }
+
+    try {
+      const tables = ['alunos', 'users', 'settings', 'professores', 'eventos', 'anamneses', 'presencas', 'escalacoes'];
+      const results: any = {};
+
+      for (const table of tables) {
+        const data = await db.all(`SELECT * FROM ${table}`);
+        if (data.length > 0) {
+          const { error } = await supabase.from(table).upsert(data);
+          results[table] = error ? `Erro: ${error.message}` : `Sincronizado ${data.length} registros`;
+        } else {
+          results[table] = "Sem dados para sincronizar";
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("Sync error:", error);
+      res.status(500).json({ success: false, message: "Erro durante a sincronização" });
+    }
+  });
+
   console.log("Migrations complete. Setting up Vite...");
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting Vite in middleware mode...");
@@ -539,6 +576,14 @@ async function startServer() {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+});
 
 startServer().catch(err => {
   console.error("Failed to start server:", err);
