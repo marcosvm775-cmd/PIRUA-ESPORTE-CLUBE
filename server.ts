@@ -5,24 +5,12 @@ import { open } from "sqlite";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
-
-const supabase = (supabaseUrl.startsWith('http') && supabaseAnonKey.length > 0) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
-
-if (!supabase) {
-  console.warn("Supabase credentials missing or invalid. Running in SQLite-only mode.");
-}
 
 async function startServer() {
   const app = express();
@@ -31,116 +19,128 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 
-  app.get("/api/health", async (req, res) => {
-    try {
-      await db.get("SELECT 1");
-      res.json({ status: "ok", database: "connected", time: new Date().toISOString() });
-    } catch (error) {
-      console.error("Health check failed:", error);
-      res.status(500).json({ status: "error", message: "Database connection failed" });
-    }
-  });
-
   console.log("Initializing database...");
+  
+  // Get database path from environment or default
+  let dbPath = process.env.DATABASE_PATH || "./database.sqlite";
+  
   // Database setup
-  const db = await open({
-    filename: "./database.sqlite",
+  let db = await open({
+    filename: dbPath,
     driver: sqlite3.Database,
   });
 
-  console.log("Database opened. Running migrations...");
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS alunos (
-      id TEXT PRIMARY KEY,
-      nome TEXT,
-      idade INTEGER,
-      categoria TEXT,
-      posicao TEXT,
-      dataNascimento TEXT,
-      responsavel TEXT,
-      telefone TEXT,
-      rgCpf TEXT UNIQUE,
-      responsavelRgCpf TEXT,
-      endereco TEXT,
-      bairro TEXT,
-      cidade TEXT,
-      uf TEXT,
-      foto TEXT,
-      status TEXT DEFAULT 'ativo',
-      numeroCamisa TEXT
-    );
+  // Function to re-initialize database if path changes
+  const reinitDatabase = async (newPath: string) => {
+    try {
+      await db.close();
+      db = await open({
+        filename: newPath,
+        driver: sqlite3.Database,
+      });
+      await runMigrations();
+      dbPath = newPath;
+      return { success: true };
+    } catch (error: any) {
+      console.error("Failed to re-init database:", error);
+      // Try to reopen the old one
+      db = await open({
+        filename: dbPath,
+        driver: sqlite3.Database,
+      });
+      return { success: false, message: error.message };
+    }
+  };
 
-    CREATE TABLE IF NOT EXISTS users (
-      username TEXT PRIMARY KEY,
-      password TEXT,
-      role TEXT,
-      alunoId TEXT,
-      FOREIGN KEY(alunoId) REFERENCES alunos(id)
-    );
+  const runMigrations = async () => {
+    console.log("Running migrations...");
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS alunos (
+        id TEXT PRIMARY KEY,
+        nome TEXT,
+        idade INTEGER,
+        categoria TEXT,
+        posicao TEXT,
+        dataNascimento TEXT,
+        responsavel TEXT,
+        telefone TEXT,
+        rgCpf TEXT UNIQUE,
+        responsavelRgCpf TEXT,
+        endereco TEXT,
+        bairro TEXT,
+        cidade TEXT,
+        uf TEXT,
+        foto TEXT,
+        status TEXT DEFAULT 'ativo',
+        numeroCamisa TEXT
+      );
 
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
 
-    CREATE TABLE IF NOT EXISTS presencas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      alunoId TEXT,
-      data TEXT,
-      status TEXT,
-      FOREIGN KEY(alunoId) REFERENCES alunos(id)
-    );
+      CREATE TABLE IF NOT EXISTS presencas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alunoId TEXT,
+        data TEXT,
+        status TEXT,
+        FOREIGN KEY(alunoId) REFERENCES alunos(id)
+      );
 
-    CREATE TABLE IF NOT EXISTS professores (
-      id TEXT PRIMARY KEY,
-      nome TEXT,
-      dataNascimento TEXT,
-      rgCpf TEXT,
-      cref TEXT,
-      telefone TEXT,
-      email TEXT,
-      especialidade TEXT,
-      endereco TEXT,
-      bairro TEXT,
-      cidade TEXT,
-      uf TEXT,
-      foto TEXT
-    );
+      CREATE TABLE IF NOT EXISTS professores (
+        id TEXT PRIMARY KEY,
+        nome TEXT,
+        dataNascimento TEXT,
+        rgCpf TEXT,
+        cref TEXT,
+        telefone TEXT,
+        email TEXT,
+        especialidade TEXT,
+        endereco TEXT,
+        bairro TEXT,
+        cidade TEXT,
+        uf TEXT,
+        foto TEXT
+      );
 
-    CREATE TABLE IF NOT EXISTS eventos (
-      id TEXT PRIMARY KEY,
-      nome TEXT,
-      endereco TEXT,
-      cidade TEXT,
-      uf TEXT,
-      dataInicio TEXT,
-      dataFim TEXT,
-      horario TEXT
-    );
+      CREATE TABLE IF NOT EXISTS eventos (
+        id TEXT PRIMARY KEY,
+        nome TEXT,
+        endereco TEXT,
+        cidade TEXT,
+        uf TEXT,
+        dataInicio TEXT,
+        dataFim TEXT,
+        horario TEXT
+      );
 
-    CREATE TABLE IF NOT EXISTS anamneses (
-      alunoId TEXT PRIMARY KEY,
-      horarioDormir TEXT,
-      dificuldadeAcordar BOOLEAN,
-      tempoCelular TEXT,
-      alimentaBem BOOLEAN,
-      frequenciaMedico TEXT,
-      fraturas TEXT,
-      tratamentoMedico TEXT,
-      medicacaoControlada TEXT,
-      outroExercicio TEXT,
-      alergias TEXT,
-      FOREIGN KEY(alunoId) REFERENCES alunos(id)
-    );
+      CREATE TABLE IF NOT EXISTS anamneses (
+        alunoId TEXT PRIMARY KEY,
+        horarioDormir TEXT,
+        dificuldadeAcordar BOOLEAN,
+        tempoCelular TEXT,
+        alimentaBem BOOLEAN,
+        frequenciaMedico TEXT,
+        fraturas TEXT,
+        tratamentoMedico TEXT,
+        medicacaoControlada TEXT,
+        outroExercicio TEXT,
+        alergias TEXT,
+        FOREIGN KEY(alunoId) REFERENCES alunos(id)
+      );
 
-    CREATE TABLE IF NOT EXISTS escalacoes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      eventoId TEXT,
-      alunoId TEXT,
-      FOREIGN KEY(eventoId) REFERENCES eventos(id),
-      FOREIGN KEY(alunoId) REFERENCES alunos(id)
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS escalacoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        eventoId TEXT,
+        alunoId TEXT,
+        FOREIGN KEY(eventoId) REFERENCES eventos(id),
+        FOREIGN KEY(alunoId) REFERENCES alunos(id)
+      );
+    `);
+  };
+
+  await runMigrations();
 
   // Migration for existing databases
   try {
@@ -149,12 +149,6 @@ async function startServer() {
   try {
     await db.run("ALTER TABLE alunos ADD COLUMN numeroCamisa TEXT");
   } catch (e) {}
-
-  // Initialize default admin if empty
-  const adminExists = await db.get("SELECT * FROM users WHERE username = '05504043689'");
-  if (!adminExists) {
-    await db.run("INSERT INTO users (username, password, role) VALUES ('05504043689', '05504043689', 'admin')");
-  }
 
   // Initialize settings if empty
   const shieldExists = await db.get("SELECT * FROM settings WHERE key = 'clubShield'");
@@ -165,59 +159,38 @@ async function startServer() {
   }
 
   // API Routes
-  app.post("/api/login", async (req, res) => {
+  app.get("/api/health", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      // Try Supabase first
-      if (supabase) {
-        const { data: user, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('username', username)
-          .eq('password', password)
-          .single();
-
-        if (user) {
-          let aluno = null;
-          if (user.role === 'aluno' && user.alunoId) {
-            const { data: alunoData } = await supabase
-              .from('alunos')
-              .select('*')
-              .eq('id', user.alunoId)
-              .single();
-            aluno = alunoData;
-          }
-          return res.json({ success: true, user: { username: user.username, role: user.role }, aluno });
-        }
-      }
-
-      // Fallback to SQLite
-      const sqliteUser = await db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password]);
-      if (sqliteUser) {
-        let aluno = null;
-        if (sqliteUser.role === 'aluno' && sqliteUser.alunoId) {
-          aluno = await db.get("SELECT * FROM alunos WHERE id = ?", [sqliteUser.alunoId]);
-        }
-        res.json({ success: true, user: { username: sqliteUser.username, role: sqliteUser.role }, aluno });
-      } else {
-        res.status(401).json({ success: false, message: "Login ou senha inválidos" });
-      }
+      await db.get("SELECT 1");
+      res.json({ 
+        status: "ok", 
+        database: "connected", 
+        path: dbPath,
+        time: new Date().toISOString() 
+      });
     } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ success: false, message: "Erro interno no servidor" });
+      console.error("Health check failed:", error);
+      res.status(500).json({ status: "error", message: "Database connection failed" });
     }
   });
 
+  app.get("/api/db-path", (req, res) => {
+    res.json({ path: dbPath });
+  });
+
+  app.post("/api/db-path", async (req, res) => {
+    const { path: newPath } = req.body;
+    if (!newPath) return res.status(400).json({ error: "Path is required" });
+    
+    const result = await reinitDatabase(newPath);
+    if (result.success) {
+      res.json({ message: "Database path updated", path: dbPath });
+    } else {
+      res.status(500).json({ error: result.message });
+    }
+  });
   app.get("/api/alunos", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: alunos, error } = await supabase.from('alunos').select('*');
-        if (alunos && alunos.length > 0) {
-          return res.json(alunos);
-        }
-      }
-      
       const sqliteAlunos = await db.all("SELECT * FROM alunos");
       res.json(sqliteAlunos);
     } catch (error) {
@@ -229,63 +202,17 @@ async function startServer() {
   app.post("/api/alunos", async (req, res) => {
     const aluno = req.body;
     try {
-      if (supabase) {
-        // Check if CPF already exists in Supabase
-        const { data: existingSupabase } = await supabase
-          .from('alunos')
-          .select('*')
-          .eq('rgCpf', aluno.rgCpf)
-          .neq('id', aluno.id)
-          .single();
-
-        if (existingSupabase) {
-          return res.status(400).json({ success: false, message: "Este CPF já está cadastrado no sistema (Supabase)." });
-        }
-
-        // Save to Supabase
-        const { error: supabaseError } = await supabase
-          .from('alunos')
-          .upsert(aluno);
-
-        if (supabaseError) {
-          console.error("Supabase upsert error:", supabaseError);
-        }
-
-        // Create/Update user for this student in Supabase
-        if (aluno.rgCpf) {
-          const cleanCpf = aluno.rgCpf.replace(/\D/g, '');
-          if (cleanCpf) {
-            await supabase
-              .from('users')
-              .upsert({
-                username: cleanCpf,
-                password: cleanCpf,
-                role: 'aluno',
-                alunoId: aluno.id
-              });
-          }
-        }
-      }
-
       // Keep SQLite in sync for now
       const existingSqlite = await db.get("SELECT * FROM alunos WHERE rgCpf = ? AND id != ?", [aluno.rgCpf, aluno.id]);
-      if (!existingSqlite) {
-        await db.run(
-          `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto, status, numeroCamisa) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto, aluno.status || 'ativo', aluno.numeroCamisa]
-        );
-
-        if (aluno.rgCpf) {
-          const cleanCpf = aluno.rgCpf.replace(/\D/g, '');
-          if (cleanCpf) {
-            await db.run(
-              "INSERT OR REPLACE INTO users (username, password, role, alunoId) VALUES (?, ?, ?, ?)",
-              [cleanCpf, cleanCpf, 'aluno', aluno.id]
-            );
-          }
-        }
+      if (existingSqlite) {
+        return res.status(400).json({ success: false, message: "Este CPF já está cadastrado no sistema (SQLite)." });
       }
+
+      await db.run(
+        `INSERT OR REPLACE INTO alunos (id, nome, idade, categoria, posicao, dataNascimento, responsavel, telefone, rgCpf, responsavelRgCpf, endereco, bairro, cidade, uf, foto, status, numeroCamisa) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [aluno.id, aluno.nome, aluno.idade, aluno.categoria, aluno.posicao, aluno.dataNascimento, aluno.responsavel, aluno.telefone, aluno.rgCpf, aluno.responsavelRgCpf, aluno.endereco, aluno.bairro, aluno.cidade, aluno.uf, aluno.foto, aluno.status || 'ativo', aluno.numeroCamisa]
+      );
 
       res.json({ success: true });
     } catch (e) {
@@ -295,24 +222,12 @@ async function startServer() {
   });
 
   app.delete("/api/alunos/:id", async (req, res) => {
-    if (supabase) await supabase.from('alunos').delete().eq('id', req.params.id);
     await db.run("DELETE FROM alunos WHERE id = ?", [req.params.id]);
     res.json({ success: true });
   });
 
   app.get("/api/settings", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: settings } = await supabase.from('settings').select('*');
-        if (settings && settings.length > 0) {
-          const formatted = settings.reduce((acc: any, curr) => {
-            acc[curr.key] = curr.value;
-            return acc;
-          }, {});
-          return res.json(formatted);
-        }
-      }
-
       const sqliteSettings = await db.all("SELECT * FROM settings");
       const formatted = sqliteSettings.reduce((acc: any, curr) => {
         acc[curr.key] = curr.value;
@@ -327,7 +242,6 @@ async function startServer() {
 
   app.post("/api/settings", async (req, res) => {
     const { key, value } = req.body;
-    if (supabase) await supabase.from('settings').upsert({ key, value });
     await db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
     res.json({ success: true });
   });
@@ -335,21 +249,6 @@ async function startServer() {
   app.get("/api/presencas", async (req, res) => {
     const { data, mes, ano } = req.query;
     
-    // Try Supabase
-    if (supabase) {
-      let supabaseQuery = supabase.from('presencas').select('*');
-      if (data) {
-        supabaseQuery = supabaseQuery.eq('data', data);
-      } else if (mes && ano) {
-        supabaseQuery = supabaseQuery.like('data', `${ano}-${mes.toString().padStart(2, '0')}-%`);
-      }
-      const { data: presencas } = await supabaseQuery;
-      if (presencas && presencas.length > 0) {
-        return res.json(presencas);
-      }
-    }
-
-    // SQLite Fallback
     let query = "SELECT * FROM presencas WHERE 1=1";
     const params = [];
     if (data) {
@@ -366,18 +265,6 @@ async function startServer() {
   app.post("/api/presencas", async (req, res) => {
     const { data, lista } = req.body; // lista: [{ alunoId, status }]
     try {
-      // Supabase
-      if (supabase) {
-        await supabase.from('presencas').delete().eq('data', data);
-        const presencasToInsert = lista.map((item: any) => ({
-          alunoId: item.alunoId,
-          data: data,
-          status: item.status
-        }));
-        await supabase.from('presencas').insert(presencasToInsert);
-      }
-
-      // SQLite
       await db.run("DELETE FROM presencas WHERE data = ?", [data]);
       const stmt = await db.prepare("INSERT INTO presencas (alunoId, data, status) VALUES (?, ?, ?)");
       for (const item of lista) {
@@ -386,12 +273,10 @@ async function startServer() {
         // Logic for active/inactive status
         if (item.status === 'presente') {
           await db.run("UPDATE alunos SET status = 'ativo' WHERE id = ?", [item.alunoId]);
-          if (supabase) await supabase.from('alunos').update({ status: 'ativo' }).eq('id', item.alunoId);
         } else if (item.status === 'falta') {
           const last4 = await db.all("SELECT status FROM presencas WHERE alunoId = ? ORDER BY data DESC LIMIT 4", [item.alunoId]);
           if (last4.length >= 4 && last4.every(p => p.status === 'falta')) {
             await db.run("UPDATE alunos SET status = 'inativo' WHERE id = ?", [item.alunoId]);
-            if (supabase) await supabase.from('alunos').update({ status: 'inativo' }).eq('id', item.alunoId);
           }
         }
       }
@@ -407,10 +292,6 @@ async function startServer() {
   // Professores
   app.get("/api/professores", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: professores } = await supabase.from('professores').select('*');
-        if (professores && professores.length > 0) return res.json(professores);
-      }
       const sqliteProfessores = await db.all("SELECT * FROM professores");
       res.json(sqliteProfessores);
     } catch (error) {
@@ -421,7 +302,6 @@ async function startServer() {
   app.post("/api/professores", async (req, res) => {
     const professor = req.body;
     try {
-      if (supabase) await supabase.from('professores').upsert(professor);
       await db.run(
         `INSERT OR REPLACE INTO professores (id, nome, dataNascimento, rgCpf, cref, telefone, email, especialidade, endereco, bairro, cidade, uf, foto) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -436,10 +316,6 @@ async function startServer() {
   // Eventos
   app.get("/api/eventos", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: eventos } = await supabase.from('eventos').select('*');
-        if (eventos && eventos.length > 0) return res.json(eventos);
-      }
       const sqliteEventos = await db.all("SELECT * FROM eventos");
       res.json(sqliteEventos);
     } catch (error) {
@@ -450,7 +326,6 @@ async function startServer() {
   app.post("/api/eventos", async (req, res) => {
     const evento = req.body;
     try {
-      if (supabase) await supabase.from('eventos').upsert(evento);
       await db.run(
         `INSERT OR REPLACE INTO eventos (id, nome, endereco, cidade, uf, dataInicio, dataFim, horario) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -465,10 +340,6 @@ async function startServer() {
   // Anamneses
   app.get("/api/anamneses/:alunoId", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: anamnese } = await supabase.from('anamneses').select('*').eq('alunoId', req.params.alunoId).single();
-        if (anamnese) return res.json(anamnese);
-      }
       const sqliteAnamnese = await db.get("SELECT * FROM anamneses WHERE alunoId = ?", [req.params.alunoId]);
       res.json(sqliteAnamnese || null);
     } catch (error) {
@@ -479,7 +350,6 @@ async function startServer() {
   app.post("/api/anamneses", async (req, res) => {
     const anamnese = req.body;
     try {
-      if (supabase) await supabase.from('anamneses').upsert(anamnese);
       await db.run(
         `INSERT OR REPLACE INTO anamneses (alunoId, horarioDormir, dificuldadeAcordar, tempoCelular, alimentaBem, frequenciaMedico, fraturas, tratamentoMedico, medicacaoControlada, outroExercicio, alergias) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -494,10 +364,6 @@ async function startServer() {
   // Escalacoes
   app.get("/api/escalacoes", async (req, res) => {
     try {
-      if (supabase) {
-        const { data: escalacoes } = await supabase.from('escalacoes').select('*');
-        if (escalacoes && escalacoes.length > 0) return res.json(escalacoes);
-      }
       const sqliteEscalacoes = await db.all("SELECT * FROM escalacoes");
       res.json(sqliteEscalacoes);
     } catch (error) {
@@ -508,14 +374,6 @@ async function startServer() {
   app.post("/api/escalacoes", async (req, res) => {
     const { eventoId, lista } = req.body; // lista: [alunoId]
     try {
-      // Supabase
-      if (supabase) {
-        await supabase.from('escalacoes').delete().eq('eventoId', eventoId);
-        const toInsert = lista.map((alunoId: string) => ({ eventoId, alunoId }));
-        await supabase.from('escalacoes').insert(toInsert);
-      }
-
-      // SQLite
       await db.run("DELETE FROM escalacoes WHERE eventoId = ?", [eventoId]);
       const stmt = await db.prepare("INSERT INTO escalacoes (eventoId, alunoId) VALUES (?, ?)");
       for (const alunoId of lista) {
@@ -528,29 +386,42 @@ async function startServer() {
     }
   });
 
-  app.post("/api/sync", async (req, res) => {
-    if (!supabase) {
-      return res.status(400).json({ success: false, message: "Supabase não configurado" });
-    }
-
+  // Backup & Restore
+  app.get("/api/export", async (req, res) => {
     try {
-      const tables = ['alunos', 'users', 'settings', 'professores', 'eventos', 'anamneses', 'presencas', 'escalacoes'];
-      const results: any = {};
-
+      const tables = ['alunos', 'settings', 'professores', 'eventos', 'anamneses', 'presencas', 'escalacoes'];
+      const data: any = {};
       for (const table of tables) {
-        const data = await db.all(`SELECT * FROM ${table}`);
-        if (data.length > 0) {
-          const { error } = await supabase.from(table).upsert(data);
-          results[table] = error ? `Erro: ${error.message}` : `Sincronizado ${data.length} registros`;
-        } else {
-          results[table] = "Sem dados para sincronizar";
+        data[table] = await db.all(`SELECT * FROM ${table}`);
+      }
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ success: false, message: "Erro ao exportar dados" });
+    }
+  });
+
+  app.post("/api/import", async (req, res) => {
+    const data = req.body;
+    try {
+      const tables = ['alunos', 'settings', 'professores', 'eventos', 'anamneses', 'presencas', 'escalacoes'];
+      for (const table of tables) {
+        if (data[table]) {
+          await db.run(`DELETE FROM ${table}`);
+          if (data[table].length > 0) {
+            const columns = Object.keys(data[table][0]);
+            const placeholders = columns.map(() => '?').join(', ');
+            const stmt = await db.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`);
+            for (const row of data[table]) {
+              await stmt.run(Object.values(row));
+            }
+            await stmt.finalize();
+          }
         }
       }
-
-      res.json({ success: true, results });
+      res.json({ success: true });
     } catch (error) {
-      console.error("Sync error:", error);
-      res.status(500).json({ success: false, message: "Erro durante a sincronização" });
+      console.error("Import error:", error);
+      res.status(500).json({ success: false, message: "Erro ao importar dados" });
     }
   });
 
@@ -589,3 +460,4 @@ startServer().catch(err => {
   console.error("Failed to start server:", err);
   process.exit(1);
 });
+

@@ -45,13 +45,19 @@ import {
   BarChart3,
   Cake,
   ClipboardCheck,
-  CalendarPlus
+  CalendarPlus,
+  Database,
+  Upload,
+  Cloud,
+  Smartphone,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDoc, handleFirestoreError, OperationType } from './firebase.ts';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -125,6 +131,14 @@ interface Evento {
   dataInicio: string;
   dataFim: string;
   horario: string;
+}
+
+interface Presenca {
+  id: string;
+  alunoId: string;
+  status: 'presente' | 'falta' | 'justificado';
+  date: string;
+  uid: string;
 }
 
 // --- Mock Data ---
@@ -263,162 +277,45 @@ const ESCUDO_URL = `data:image/svg+xml;utf8,${encodeURIComponent(`
 
 // --- Components ---
 
-function Login({ onLogin, error, username, setUsername, password, setPassword, setIsRegistering }: { 
-  onLogin: (e: React.FormEvent) => void, 
-  error: string,
-  username: string,
-  setUsername: (v: string) => void,
-  password: string,
-  setPassword: (v: string) => void,
-  setIsRegistering: (v: boolean) => void
-}) {
-  const [loginType, setLoginType] = useState<'selection' | 'adm' | 'aluno'>('selection');
-
-  if (loginType === 'selection') {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-2xl"
-        >
-          <div className="flex flex-col items-center mb-10">
-            <div className="w-24 h-24 bg-zinc-800 rounded-3xl flex items-center justify-center border border-zinc-700 mb-6 shadow-xl">
-              <img src={ESCUDO_URL} alt="Logo" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tighter text-yellow-400">PIRUÁ E.C.</h1>
-            <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-2">Seja bem-vindo</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <button 
-              onClick={() => setLoginType('adm')}
-              className="group relative flex items-center gap-4 bg-zinc-800 border border-zinc-700 p-6 rounded-2xl hover:border-yellow-400 transition-all text-left overflow-hidden"
-            >
-              <div className="bg-yellow-400/10 text-yellow-400 p-3 rounded-xl group-hover:bg-yellow-400 group-hover:text-black transition-all">
-                <ShieldCheck size={24} />
-              </div>
-              <div>
-                <h3 className="font-black text-lg text-zinc-100">Acessar ADM</h3>
-                <p className="text-xs text-zinc-500">Gestão e administração</p>
-              </div>
-              <ChevronRight className="ml-auto text-zinc-600 group-hover:text-yellow-400 transition-all" />
-            </button>
-
-            <button 
-              onClick={() => setLoginType('aluno')}
-              className="group relative flex items-center gap-4 bg-zinc-800 border border-zinc-700 p-6 rounded-2xl hover:border-yellow-400 transition-all text-left overflow-hidden"
-            >
-              <div className="bg-yellow-400/10 text-yellow-400 p-3 rounded-xl group-hover:bg-yellow-400 group-hover:text-black transition-all">
-                <UserCircle size={24} />
-              </div>
-              <div>
-                <h3 className="font-black text-lg text-zinc-100">Acessar Aluno</h3>
-                <p className="text-xs text-zinc-500">Meu perfil e carteirinha</p>
-              </div>
-              <ChevronRight className="ml-auto text-zinc-600 group-hover:text-yellow-400 transition-all" />
-            </button>
-          </div>
-
-          <div className="mt-8 pt-8 border-t border-zinc-800">
-            <button 
-              onClick={() => setIsRegistering(true)}
-              className="w-full bg-zinc-800 text-zinc-100 font-bold py-4 rounded-xl border border-zinc-700 hover:border-yellow-400 transition-all uppercase text-xs tracking-widest"
-            >
-              Novo Aluno? Cadastre-se aqui
-            </button>
-          </div>
-          
-          <p className="text-center text-[10px] text-zinc-600 mt-10 uppercase tracking-widest font-bold">
-            Sistema de Gestão Esportiva v1.0
-          </p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="w-full max-w-md bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-2xl"
-      >
-        <button 
-          onClick={() => setLoginType('selection')}
-          className="flex items-center gap-2 text-zinc-500 hover:text-yellow-400 transition-all text-xs font-bold uppercase mb-8"
-        >
-          <ChevronLeft size={16} /> Voltar
-        </button>
-
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center border border-zinc-700 mb-4">
-            <img src={ESCUDO_URL} alt="Logo" className="w-10 h-10 object-contain" referrerPolicy="no-referrer" />
-          </div>
-          <h1 className="text-xl font-black tracking-tighter text-yellow-400">
-            {loginType === 'adm' ? 'ACESSO ADMINISTRATIVO' : 'PORTAL DO ALUNO'}
-          </h1>
-          <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Piruá Esporte Clube</p>
-        </div>
-
-        <form onSubmit={onLogin} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase">Login (CPF)</label>
-            <input 
-              name="email"
-              type="text" 
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-              placeholder="000.000.000-00"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase">Senha</label>
-            <input 
-              name="password"
-              type="password" 
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-              placeholder="••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold p-3 rounded-xl text-center">
-              {error}
-            </div>
-          )}
-
-          <button 
-            type="submit"
-            className="w-full bg-yellow-400 text-black font-black py-4 rounded-xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20"
-          >
-            Entrar
-          </button>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed }: { icon: any, label: string, active: boolean, onClick: () => void, collapsed?: boolean }) => (
+const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed, isMobile }: { icon: any, label: string, active: boolean, onClick: () => void, collapsed?: boolean, isMobile?: boolean }) => (
   <button 
     onClick={onClick}
     className={cn(
-      "flex items-center w-full gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left",
+      "flex items-center w-full gap-3 px-4 py-3 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden",
       active 
-        ? "bg-yellow-400 text-black shadow-lg shadow-yellow-400/20 font-bold" 
-        : "text-zinc-400 hover:bg-zinc-800 hover:text-yellow-400",
-      collapsed && "justify-center px-0"
+        ? "bg-yellow-400 text-black shadow-xl shadow-yellow-400/20 font-bold" 
+        : "text-zinc-400 hover:bg-zinc-800/50 hover:text-yellow-400",
+      collapsed && !isMobile && "justify-center px-0"
     )}
-    title={collapsed ? label : ""}
+    title={collapsed && !isMobile ? label : ""}
   >
-    <Icon size={20} className="shrink-0" />
-    {!collapsed && <span className="text-sm truncate">{label}</span>}
+    {active && (
+      <motion.div 
+        layoutId="active-pill"
+        className="absolute inset-0 bg-yellow-400 z-0"
+        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+      />
+    )}
+    <Icon size={20} className={cn("shrink-0 relative z-10 transition-transform duration-300", active ? "scale-110" : "group-hover:scale-110")} />
+    {(!collapsed || isMobile) && <span className="text-xs font-bold uppercase tracking-wider relative z-10 truncate">{label}</span>}
+  </button>
+);
+
+const BottomNavItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
+  <button 
+    onClick={onClick}
+    className={cn(
+      "flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all duration-300",
+      active ? "text-yellow-400" : "text-zinc-500"
+    )}
+  >
+    <div className={cn(
+      "p-2 rounded-xl transition-all duration-300",
+      active ? "bg-yellow-400/10 scale-110" : ""
+    )}>
+      <Icon size={20} />
+    </div>
+    <span className="text-[8px] font-black uppercase tracking-tighter">{label}</span>
   </button>
 );
 
@@ -430,114 +327,179 @@ export default function App() {
   const [whatsappLink, setWhatsappLink] = useState('https://wa.me/5537999999999');
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>('aluno');
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userRole, setUserRole] = useState<UserRole>('admin');
   const [loggedInAluno, setLoggedInAluno] = useState<Aluno | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
   const [clubShield, setClubShield] = useState(ESCUDO_URL);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [anamneseData, setAnamneseData] = useState<any>({});
   const [eventLineups, setEventLineups] = useState<Record<string, string[]>>({});
 
-  // Fetch data on mount
-  const [isRegistering, setIsRegistering] = useState(false);
-
+  // --- Firebase Auth ---
   useEffect(() => {
-    const fetchData = async (retries = 3) => {
-      try {
-        const healthRes = await fetch('/api/health');
-        if (!healthRes.ok) {
-          if (retries > 0) {
-            setTimeout(() => fetchData(retries - 1), 2000);
-            return;
-          }
-          throw new Error("Server health check failed");
-        }
-        
-        const resAlunos = await fetch('/api/alunos');
-        if (!resAlunos.ok) throw new Error("Failed to fetch students");
-        const dataAlunos = await resAlunos.json();
-        setAlunos(Array.isArray(dataAlunos) && dataAlunos.length > 0 ? dataAlunos : MOCK_ALUNOS);
-        
-        const resProf = await fetch('/api/professores');
-        if (!resProf.ok) throw new Error("Failed to fetch professors");
-        const dataProf = await resProf.json();
-        setProfessores(Array.isArray(dataProf) && dataProf.length > 0 ? dataProf : MOCK_PROFESSORES);
-
-        const resEv = await fetch('/api/eventos');
-        if (!resEv.ok) throw new Error("Failed to fetch events");
-        const dataEv = await resEv.json();
-        setEventos(Array.isArray(dataEv) && dataEv.length > 0 ? dataEv : MOCK_EVENTOS);
-
-        const resEsc = await fetch('/api/escalacoes');
-        if (!resEsc.ok) throw new Error("Failed to fetch lineups");
-        const dataEsc = await resEsc.json();
-        if (Array.isArray(dataEsc) && dataEsc.length > 0) {
-          const formattedEsc: Record<string, string[]> = {};
-          dataEsc.forEach((esc: any) => {
-            if (!formattedEsc[esc.eventoId]) formattedEsc[esc.eventoId] = [];
-            formattedEsc[esc.eventoId].push(esc.alunoId);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (!userDoc.exists()) {
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            displayName: currentUser.displayName,
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+            role: currentUser.email === 'marcos.vm775@gmail.com' ? 'admin' : 'user'
           });
-          setEventLineups(formattedEsc);
-        }
-
-        const resSettings = await fetch('/api/settings');
-        if (!resSettings.ok) throw new Error("Failed to fetch settings");
-        const dataSettings = await resSettings.json();
-        if (dataSettings.clubShield) setClubShield(dataSettings.clubShield);
-        if (dataSettings.instagramLink) setInstagramLink(dataSettings.instagramLink);
-        if (dataSettings.whatsappLink) setWhatsappLink(dataSettings.whatsappLink);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        if (retries > 0) {
-          setTimeout(() => fetchData(retries - 1), 2000);
+          setUserRole(currentUser.email === 'marcos.vm775@gmail.com' ? 'admin' : 'aluno');
         } else {
-          setLoginError("Erro de conexão com o servidor. Verifique se o backend está rodando.");
-          setAlunos(MOCK_ALUNOS);
+          const userData = userDoc.data();
+          setUserRole(userData.role === 'admin' ? 'admin' : 'aluno');
         }
+        setUser(currentUser);
+      } else {
+        setUser(null);
       }
-    };
-    fetchData();
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setIsAuthenticated(true);
-        setUserRole(data.user.role);
-        setLoggedInAluno(data.aluno);
-        setLoginError('');
-        if (data.user.role === 'aluno') {
-          setCurrentView('cadastrar_aluno');
-        } else {
-          setCurrentView('dashboard');
-        }
-      } else {
-        setLoginError(data.message);
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      setLoginError('Erro ao conectar com o servidor');
+      console.error("Erro ao fazer login:", error);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setUserRole('aluno');
-    setLoggedInAluno(null);
-    setUsername('');
-    setPassword('');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentView('dashboard');
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+    }
+  };
+
+  // --- Firebase Sync ---
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubAlunos = onSnapshot(collection(db, 'alunos'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aluno));
+      setAlunos(data.length > 0 ? data : MOCK_ALUNOS);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'alunos'));
+
+    const unsubEventos = onSnapshot(collection(db, 'eventos'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evento));
+      setEventos(data.length > 0 ? data : MOCK_EVENTOS);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'eventos'));
+
+    const unsubProfessores = onSnapshot(collection(db, 'professores'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Professor));
+      setProfessores(data.length > 0 ? data : MOCK_PROFESSORES);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'professores'));
+
+    const unsubEscalacoes = onSnapshot(collection(db, 'escalacoes'), (snapshot) => {
+      const formattedEsc: Record<string, string[]> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        formattedEsc[data.eventoId] = data.lista;
+      });
+      setEventLineups(formattedEsc);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'escalacoes'));
+
+    const unsubPresencas = onSnapshot(collection(db, 'presencas'), (snapshot) => {
+      const today = new Date().toISOString().split('T')[0];
+      const todayPresencas: Record<string, 'presente' | 'falta' | 'justificado'> = {};
+      const history: Presenca[] = [];
+      snapshot.docs.forEach(doc => {
+        const data = doc.data() as Presenca;
+        history.push({ ...data, id: doc.id });
+        if (data.date === today) {
+          todayPresencas[data.alunoId] = data.status;
+        }
+      });
+      setPresencas(todayPresencas);
+      setPresencasHistory(history);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'presencas'));
+
+    const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (doc.id === 'clubShield') setClubShield(data.value);
+        if (doc.id === 'instagramLink') setInstagramLink(data.value);
+        if (doc.id === 'whatsappLink') setWhatsappLink(data.value);
+      });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'settings'));
+
+    return () => {
+      unsubAlunos();
+      unsubEventos();
+      unsubProfessores();
+      unsubSettings();
+      unsubEscalacoes();
+      unsubPresencas();
+    };
+  }, [user]);
+
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+      if (window.innerWidth < 1024) {
+        setIsSidebarCollapsed(true);
+      } else {
+        setIsSidebarCollapsed(false);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleExport = async () => {
+    try {
+      const data = {
+        alunos,
+        professores,
+        eventos,
+        presencas: presencasHistory,
+        eventLineups,
+        settings: {
+          clubShield,
+          instagramLink,
+          whatsappLink
+        },
+        exportDate: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-pirua-ec-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Erro ao exportar dados');
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!confirm('Deseja realmente importar os dados? Isso substituirá os dados atuais na nuvem (se implementado).')) return;
+
+    alert('Importação direta na nuvem não disponível via arquivo. Por favor, use o painel administrativo.');
   };
 
   const handleSaveAluno = async (aluno: Aluno) => {
+    if (!user) return;
+    
     // Normalize CPF
     if (aluno.rgCpf) {
       aluno.rgCpf = aluno.rgCpf.replace(/\D/g, '');
@@ -562,49 +524,29 @@ export default function App() {
     }
 
     try {
-      const res = await fetch('/api/alunos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(aluno)
-      });
-      if (res.ok) {
-        setAlunos(prev => {
-          const exists = prev.find(a => a.id === aluno.id);
-          if (exists) return prev.map(a => a.id === aluno.id ? aluno : a);
-          return [...prev, aluno];
-        });
-        alert('Cadastro salvo com sucesso!');
-      }
+      const alunoRef = doc(db, 'alunos', aluno.id);
+      await setDoc(alunoRef, { ...aluno, uid: user.uid }, { merge: true });
+      alert('Cadastro salvo com sucesso na nuvem!');
     } catch (error) {
-      console.error("Error saving aluno:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'alunos');
     }
   };
 
   const handleDeleteAluno = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este aluno?')) {
       try {
-        const res = await fetch(`/api/alunos/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          setAlunos(prev => prev.filter(a => a.id !== id));
-        }
+        await deleteDoc(doc(db, 'alunos', id));
+        alert('Aluno excluído com sucesso!');
       } catch (error) {
-        console.error("Error deleting aluno:", error);
+        handleFirestoreError(error, OperationType.DELETE, 'alunos');
       }
     }
   };
 
   const handleSaveSetting = async (key: string, value: string) => {
+    if (!user) return false;
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value })
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error(`Error saving setting ${key}:`, errorData);
-        return false;
-      }
+      await setDoc(doc(db, 'settings', key), { value, updatedAt: new Date().toISOString() });
       return true;
     } catch (error) {
       console.error("Error saving setting:", error);
@@ -612,100 +554,92 @@ export default function App() {
     }
   };
 
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleSyncSupabase = async () => {
-    if (!window.confirm('Isso irá enviar todos os dados locais (SQLite) para o Supabase. Deseja continuar?')) return;
-    
-    setIsSyncing(true);
-    try {
-      const res = await fetch('/api/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        let message = "Sincronização concluída!\n\n";
-        Object.entries(data.results).forEach(([table, result]) => {
-          message += `${table}: ${result}\n`;
-        });
-        alert(message);
-      } else {
-        alert('Erro na sincronização: ' + data.message);
-      }
-    } catch (error) {
-      alert('Erro ao conectar com o servidor para sincronização');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const handleSaveProfessor = async (professor: Professor) => {
+    if (!user) return;
     try {
-      const res = await fetch('/api/professores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(professor)
-      });
-      if (res.ok) {
-        setProfessores(prev => {
-          const exists = prev.find(p => p.id === professor.id);
-          if (exists) return prev.map(p => p.id === professor.id ? professor : p);
-          return [...prev, professor];
-        });
-        alert('Professor salvo com sucesso!');
-      }
+      await setDoc(doc(db, 'professores', professor.id), { ...professor, uid: user.uid }, { merge: true });
+      alert('Professor salvo com sucesso na nuvem!');
     } catch (error) {
-      console.error("Error saving professor:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'professores');
     }
   };
 
   const handleSaveEvento = async (evento: Evento) => {
+    if (!user) return;
     try {
-      const res = await fetch('/api/eventos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(evento)
-      });
-      if (res.ok) {
-        setEventos(prev => {
-          const exists = prev.find(e => e.id === evento.id);
-          if (exists) return prev.map(e => e.id === evento.id ? evento : e);
-          return [...prev, evento];
-        });
-        alert('Evento salvo com sucesso!');
-      }
+      await setDoc(doc(db, 'eventos', evento.id), { ...evento, uid: user.uid }, { merge: true });
+      alert('Evento salvo com sucesso na nuvem!');
     } catch (error) {
-      console.error("Error saving evento:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'eventos');
     }
   };
 
-  const handleSaveAnamnese = async () => {
-    if (!selectedAnamneseAluno) return;
+  const handleSaveAnamnese = async (anamneseData: any) => {
+    if (!selectedAnamneseAluno || !user) return;
     try {
-      const res = await fetch('/api/anamneses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...anamneseData, alunoId: selectedAnamneseAluno.id })
+      await setDoc(doc(db, 'anamneses', selectedAnamneseAluno.id), {
+        ...anamneseData,
+        alunoId: selectedAnamneseAluno.id,
+        updatedAt: new Date().toISOString(),
+        uid: user.uid
       });
-      if (res.ok) {
-        alert('Anamnese salva com sucesso!');
-      }
+      alert('Anamnese salva com sucesso!');
+      setCurrentView('lista_alunos');
     } catch (error) {
-      console.error("Error saving anamnese:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'anamneses');
     }
   };
 
   const handleSaveEscalacao = async (eventoId: string, lista: string[]) => {
+    if (!user) return;
     try {
-      const res = await fetch('/api/escalacoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventoId, lista })
+      await setDoc(doc(db, 'escalacoes', eventoId), {
+        eventoId,
+        lista,
+        updatedAt: new Date().toISOString(),
+        uid: user.uid
       });
-      if (res.ok) {
-        alert('Escalação salva com sucesso!');
-      }
+      alert('Escalação salva com sucesso na nuvem!');
     } catch (error) {
-      console.error("Error saving escalacao:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'escalacoes');
+    }
+  };
+
+  const handleGenerateInstaPost = async (aluno: Aluno) => {
+    const element = document.getElementById('insta-post-template');
+    if (!element || !aluno) return;
+
+    // Wait a bit for React to render the new state and for images to potentially start loading
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Wait for all images in the template to load
+    const images = element.getElementsByTagName('img');
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    });
+    await Promise.all(imagePromises);
+    
+    try {
+      const canvas = await html2canvas(element, {
+        useCORS: true,
+        scale: 2, // Higher quality
+        backgroundColor: '#000000',
+        logging: false,
+        allowTaint: true
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = `parabens-${aluno.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Error generating Instagram post:", error);
+      alert('Erro ao gerar imagem para o Instagram');
     }
   };
 
@@ -713,71 +647,110 @@ export default function App() {
     const element = document.getElementById(elementId);
     if (!element) return;
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    // Create a hidden iframe for printing
+    let printFrame = document.getElementById('print-frame') as HTMLIFrameElement;
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'print-frame';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+    }
 
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map(s => s.outerHTML)
       .join('');
 
-    printWindow.document.write(`
+    const content = `
       <html>
         <head>
           <title>Impressão - Piruá E.C.</title>
           ${styles}
           <style>
             @media print {
-              body { background: white !important; color: black !important; padding: 20px; }
+              @page { margin: 10mm; }
+              body { background: white !important; color: black !important; padding: 0; margin: 0; }
               .print-hidden { display: none !important; }
               * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             }
-            body { font-family: sans-serif; background: white; color: black; }
+            body { font-family: sans-serif; background: white; color: black; padding: 20px; }
             .hidden { display: block !important; }
             .print\\:block { display: block !important; }
             .print\\:hidden { display: none !important; }
-            .bg-zinc-900 { background-color: white !important; }
-            .text-white { color: black !important; }
+            .bg-zinc-900, .bg-zinc-950 { background-color: white !important; }
+            .text-white, .text-zinc-100 { color: black !important; }
             .text-zinc-400, .text-zinc-500 { color: #666 !important; }
             .border-zinc-800 { border-color: #eee !important; }
+            .rounded-3xl, .rounded-2xl { border-radius: 8px !important; }
+            canvas { max-width: 100% !important; height: auto !important; }
           </style>
         </head>
         <body>
           <div class="print-container">
             ${element.innerHTML}
           </div>
-          <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-                window.close();
-              }, 500);
-            };
-          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    const doc = printFrame.contentDocument || printFrame.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(content);
+    doc.close();
+
+    // Wait for content to load
+    printFrame.onload = () => {
+      setTimeout(() => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+      }, 500);
+    };
+
+    // If already loaded (for browsers that don't trigger onload for doc.write)
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    }, 1000);
   };
 
   const handleDownload = async (elementId: string, filename: string) => {
     const element = document.getElementById(elementId);
     if (!element) return;
     
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${filename}.pdf`);
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${filename}.pdf`);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Erro ao gerar PDF. Tente novamente.");
+    }
   };
   const [selectedAluno, setSelectedAluno] = useState<Aluno | null>(null);
   const [selectedEvento, setSelectedEvento] = useState<Evento | null>(null);
   const [selectedAnamneseAluno, setSelectedAnamneseAluno] = useState<Aluno | null>(null);
+  const [celebratingAluno, setCelebratingAluno] = useState<Aluno | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [presencas, setPresencas] = useState<Record<string, 'presente' | 'falta' | 'justificado'>>({});
+  const [presencasHistory, setPresencasHistory] = useState<Presenca[]>([]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
@@ -786,17 +759,16 @@ export default function App() {
 
   const fetchAttendanceReport = async (type: 'date' | 'month') => {
     try {
-      let url = '/api/presencas';
+      let results: Presenca[] = [];
       if (type === 'date') {
-        url += `?data=${reportDate}`;
+        results = presencasHistory.filter(p => p.date === reportDate);
       } else {
-        url += `?mes=${reportMonth}&ano=${reportYear}`;
+        results = presencasHistory.filter(p => {
+          const [y, m, d] = p.date.split('-');
+          return parseInt(m) === reportMonth && parseInt(y) === reportYear;
+        });
       }
-      
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch attendance report");
-      const data = await res.json();
-      setAttendanceReport(Array.isArray(data) ? data : []);
+      setAttendanceReport(results);
     } catch (error) {
       console.error("Error fetching attendance report:", error);
       setAttendanceReport([]);
@@ -804,7 +776,8 @@ export default function App() {
   };
 
   const handleSaveChamada = async () => {
-    const data = new Date().toISOString().split('T')[0];
+    if (!user) return;
+    const date = new Date().toISOString().split('T')[0];
     const lista = Object.entries(presencas).map(([alunoId, status]) => ({ alunoId, status }));
     
     if (lista.length === 0) {
@@ -813,28 +786,35 @@ export default function App() {
     }
 
     try {
-      const res = await fetch('/api/presencas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, lista })
-      });
-      if (res.ok) {
-        alert('Chamada salva com sucesso!');
-        // Refresh students to get updated status
-        const resAlunos = await fetch('/api/alunos');
-        if (resAlunos.ok) {
-          const dataAlunos = await resAlunos.json();
-          setAlunos(dataAlunos);
-        }
+      for (const item of lista) {
+        const id = `${date}_${item.alunoId}`;
+        await setDoc(doc(db, 'presencas', id), {
+          alunoId: item.alunoId,
+          status: item.status,
+          date,
+          uid: user.uid
+        });
       }
+      alert('Chamada salva com sucesso na nuvem!');
     } catch (error) {
-      console.error("Error saving attendance:", error);
-      alert('Erro ao salvar chamada');
+      handleFirestoreError(error, OperationType.WRITE, 'presencas');
     }
   };
 
-  const handlePresence = (alunoId: string, status: 'presente' | 'falta' | 'justificado') => {
-    setPresencas(prev => ({ ...prev, [alunoId]: status }));
+  const handlePresence = async (alunoId: string, status: 'presente' | 'falta' | 'justificado') => {
+    if (!user) return;
+    const date = new Date().toISOString().split('T')[0];
+    const id = `${date}_${alunoId}`;
+    try {
+      await setDoc(doc(db, 'presencas', id), {
+        alunoId,
+        status,
+        date,
+        uid: user.uid
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'presencas');
+    }
   };
 
   useEffect(() => {
@@ -955,177 +935,44 @@ export default function App() {
     return alunos.filter(a => a.nome.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [searchQuery, alunos]);
 
-  if (!isAuthenticated && !isRegistering) {
+  if (authLoading) {
     return (
-      <Login 
-        onLogin={handleLogin} 
-        error={loginError} 
-        username={username}
-        setUsername={setUsername}
-        password={password}
-        setPassword={setPassword}
-        setIsRegistering={setIsRegistering}
-      />
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
+        <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-zinc-400 font-bold uppercase tracking-widest animate-pulse">Carregando Piruá Cloud...</p>
+      </div>
     );
   }
 
-  if (isRegistering) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-950 p-4 md:p-8 overflow-y-auto">
-        <div className="max-w-5xl mx-auto">
-          <button 
-            onClick={() => setIsRegistering(false)}
-            className="flex items-center gap-2 text-zinc-500 hover:text-yellow-400 transition-all text-xs font-bold uppercase mb-8"
-          >
-            <ChevronLeft size={16} /> Voltar para o Login
-          </button>
-
-          <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <UserPlus className="text-yellow-400" /> Auto-Cadastro de Atleta
-              </h3>
-              <div className="bg-yellow-400/10 border border-yellow-400/20 p-3 rounded-xl">
-                <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest leading-tight">
-                  Importante: Seu CPF será seu Login e sua Senha inicial.
-                </p>
-              </div>
-            </div>
-
-            <form className="space-y-8" onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const alunoData: any = {
-                id: Date.now().toString(),
-                nome: formData.get('nome'),
-                dataNascimento: formData.get('dataNascimento'),
-                rgCpf: formData.get('rgCpf'),
-                telefone: formData.get('telefone'),
-                categoria: formCategoria,
-                endereco: formData.get('endereco'),
-                bairro: formData.get('bairro'),
-                cidade: formData.get('cidade'),
-                uf: formData.get('uf'),
-                responsavel: formData.get('responsavel'),
-                responsavelRgCpf: formData.get('responsavelRgCpf'),
-                telefoneResponsavel: formData.get('telefoneResponsavel'),
-                foto: photoPreview
-              };
-              
-              if (!alunoData.rgCpf) {
-                alert('O CPF é obrigatório para o cadastro.');
-                return;
-              }
-
-              await handleSaveAluno(alunoData);
-              setIsRegistering(false);
-              alert('Cadastro realizado com sucesso! Agora você pode entrar usando seu CPF como login e senha.');
-            }}>
-              {/* Reuse the same form fields as in the main app */}
-              <div className="space-y-6">
-                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Dados do Aluno</h4>
-                
-                <div className="flex flex-col md:flex-row gap-8 items-start">
-                  <div className="shrink-0 space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase block">Foto 3x4</label>
-                    <div className="relative group">
-                      <div className={cn(
-                        "w-32 h-40 bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
-                        photoPreview && "border-solid border-yellow-400"
-                      )}>
-                        {photoPreview ? (
-                          <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="text-center p-4">
-                            <IdCard className="text-zinc-600 mx-auto mb-2" size={32} />
-                            <p className="text-[10px] text-zinc-500 font-bold uppercase leading-tight">Clique para subir</p>
-                          </div>
-                        )}
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handlePhotoChange}
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase">Nome Completo</label>
-                      <input name="nome" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Nome completo" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase">Data de Nascimento</label>
-                      <input name="dataNascimento" type="date" required onChange={handleBirthDateChange} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF</label>
-                      <input name="rgCpf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="000.000.000-00" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase">Telefone</label>
-                      <input name="telefone" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="(00) 00000-0000" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-500 uppercase">Categoria</label>
-                      <select value={formCategoria} onChange={(e) => setFormCategoria(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none">
-                        {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Endereço</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="md:col-span-2 space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">Endereço Completo</label>
-                    <input name="endereco" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Rua, número, complemento" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">Bairro</label>
-                    <input name="bairro" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Bairro" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">Cidade</label>
-                    <input name="cidade" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Cidade" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">UF</label>
-                    <input name="uf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Estado" maxLength={2} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <h4 className="text-xs font-black text-yellow-400 uppercase tracking-[0.2em] border-b border-zinc-800 pb-2">Dados do Responsável</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">Nome do Responsável</label>
-                    <input name="responsavel" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="Nome completo" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF do Responsável</label>
-                    <input name="responsavelRgCpf" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="000.000.000-00" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-500 uppercase">Telefone do Responsável</label>
-                    <input name="telefoneResponsavel" type="text" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="(00) 00000-0000" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6">
-                <button type="submit" className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all uppercase tracking-widest shadow-lg shadow-yellow-400/20">
-                  Finalizar Meu Cadastro
-                </button>
-              </div>
-            </form>
-          </div>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-yellow-400/20 blur-[120px] rounded-full"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yellow-400/10 blur-[120px] rounded-full"></div>
         </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full text-center relative z-10"
+        >
+          <img src={currentShield} alt="Logo" className="w-32 h-32 mx-auto mb-8 drop-shadow-[0_0_20px_rgba(250,204,21,0.3)]" />
+          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">Piruá <span className="text-yellow-400">Cloud</span></h1>
+          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mb-12">Gestão Esportiva em Tempo Real</p>
+          
+          <div className="bg-zinc-900/50 p-8 rounded-3xl border border-white/5 backdrop-blur-xl shadow-2xl">
+            <p className="text-zinc-400 text-sm mb-8">Conecte-se para sincronizar seus dados entre PC e Celular.</p>
+            <button 
+              onClick={handleLogin}
+              className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all flex items-center justify-center gap-3 shadow-lg shadow-yellow-400/20"
+            >
+              <Cloud size={20} /> Entrar com Google
+            </button>
+          </div>
+          
+          <p className="mt-12 text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">© 2026 Piruá Esporte Clube</p>
+        </motion.div>
       </div>
     );
   }
@@ -1209,6 +1056,7 @@ export default function App() {
                 active={currentView === 'dashboard'} 
                 onClick={() => { setCurrentView('dashboard'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={UserPlus} 
@@ -1216,6 +1064,7 @@ export default function App() {
                 active={currentView === 'cadastrar_aluno'} 
                 onClick={() => { setCurrentView('cadastrar_aluno'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={ShieldCheck} 
@@ -1223,6 +1072,7 @@ export default function App() {
                 active={currentView === 'cadastrar_professor'} 
                 onClick={() => { setCurrentView('cadastrar_professor'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Users} 
@@ -1230,6 +1080,7 @@ export default function App() {
                 active={currentView === 'lista_alunos'} 
                 onClick={() => { setCurrentView('lista_alunos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Cake} 
@@ -1237,6 +1088,7 @@ export default function App() {
                 active={currentView === 'aniversariantes'} 
                 onClick={() => { setCurrentView('aniversariantes'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={CheckSquare} 
@@ -1244,6 +1096,7 @@ export default function App() {
                 active={currentView === 'chamada'} 
                 onClick={() => { setCurrentView('chamada'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={BarChart3} 
@@ -1251,6 +1104,7 @@ export default function App() {
                 active={currentView === 'relatorios'} 
                 onClick={() => { setCurrentView('relatorios'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={CalendarDays} 
@@ -1258,6 +1112,7 @@ export default function App() {
                 active={currentView === 'eventos'} 
                 onClick={() => { setCurrentView('eventos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={ClipboardList} 
@@ -1265,6 +1120,7 @@ export default function App() {
                 active={currentView === 'anamnese'} 
                 onClick={() => { setCurrentView('anamnese'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={FileText} 
@@ -1272,6 +1128,7 @@ export default function App() {
                 active={currentView === 'documentos'} 
                 onClick={() => { setCurrentView('documentos'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Settings} 
@@ -1279,6 +1136,7 @@ export default function App() {
                 active={currentView === 'configuracoes'} 
                 onClick={() => { setCurrentView('configuracoes'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={IdCard} 
@@ -1286,6 +1144,7 @@ export default function App() {
                 active={currentView === 'carteirinha'} 
                 onClick={() => { setCurrentView('carteirinha'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Layers} 
@@ -1293,6 +1152,7 @@ export default function App() {
                 active={currentView === 'categorias'} 
                 onClick={() => { setCurrentView('categorias'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Trophy} 
@@ -1300,6 +1160,7 @@ export default function App() {
                 active={currentView === 'escalacao'} 
                 onClick={() => { setCurrentView('escalacao'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
             </>
           ) : (
@@ -1310,6 +1171,7 @@ export default function App() {
                 active={currentView === 'cadastrar_aluno'} 
                 onClick={() => { setCurrentView('cadastrar_aluno'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={ClipboardList} 
@@ -1317,6 +1179,7 @@ export default function App() {
                 active={currentView === 'anamnese'} 
                 onClick={() => { setCurrentView('anamnese'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={IdCard} 
@@ -1324,6 +1187,7 @@ export default function App() {
                 active={currentView === 'carteirinha'} 
                 onClick={() => { setCurrentView('carteirinha'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
               <SidebarItem 
                 icon={Trophy} 
@@ -1331,6 +1195,7 @@ export default function App() {
                 active={currentView === 'escalacao'} 
                 onClick={() => { setCurrentView('escalacao'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
               />
             </>
           )}
@@ -1348,21 +1213,45 @@ export default function App() {
               </div>
             )}
           </div>
-          <button 
-            onClick={handleLogout}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-all font-bold text-sm",
-              isSidebarCollapsed && "justify-center px-0"
-            )}
-          >
-            <LogOut size={20} />
-            {!isSidebarCollapsed && <span>Sair do Sistema</span>}
-          </button>
         </div>
       </aside>
 
+      {/* Mobile Bottom Navigation */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-4 pb-safe pt-2 z-[60] flex items-center justify-around">
+        <BottomNavItem 
+          icon={LayoutDashboard} 
+          label="Início" 
+          active={currentView === 'dashboard'} 
+          onClick={() => setCurrentView('dashboard')} 
+        />
+        <BottomNavItem 
+          icon={Users} 
+          label="Alunos" 
+          active={currentView === 'lista_alunos'} 
+          onClick={() => setCurrentView('lista_alunos')} 
+        />
+        <BottomNavItem 
+          icon={CheckSquare} 
+          label="Chamada" 
+          active={currentView === 'chamada'} 
+          onClick={() => setCurrentView('chamada')} 
+        />
+        <BottomNavItem 
+          icon={CalendarDays} 
+          label="Eventos" 
+          active={currentView === 'eventos'} 
+          onClick={() => setCurrentView('eventos')} 
+        />
+        <BottomNavItem 
+          icon={Menu} 
+          label="Menu" 
+          active={isMobileMenuOpen} 
+          onClick={() => setIsMobileMenuOpen(true)} 
+        />
+      </div>
+
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pb-24 lg:pb-8">
         {/* Header */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
           <div className="flex items-center gap-4 w-full md:w-auto">
@@ -1421,50 +1310,59 @@ export default function App() {
 
             {currentView === 'dashboard' && userRole === 'admin' && (
               <div className="space-y-8">
-                <div className="bg-zinc-900 p-10 rounded-3xl border border-zinc-800 shadow-xl flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+                <div className="glass p-10 rounded-3xl border border-white/5 shadow-2xl flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/10 rounded-full -mr-32 -mt-32 blur-3xl" />
                   <div className="w-32 h-32 shrink-0 relative z-10">
-                    <img src={currentShield} alt="Escudo Piruá" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                    <img src={currentShield} alt="Escudo Piruá" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(250,204,21,0.3)]" referrerPolicy="no-referrer" />
                   </div>
                   <div className="relative z-10">
-                    <h3 className="text-3xl font-black text-yellow-400 uppercase tracking-tight mb-2">Bem-vindo ao Piruá E.C.</h3>
-                    <p className="text-zinc-400 max-w-xl">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
+                    <h3 className="text-3xl font-black text-yellow-400 uppercase tracking-tight mb-2 text-glow">Bem-vindo ao Piruá E.C.</h3>
+                    <p className="text-zinc-400 max-w-xl font-medium">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
-                    <Users className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">{alunos.filter(a => a.status !== 'inativo').length}</h3>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Alunos Ativos</p>
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group">
+                    <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                      <Users className="text-yellow-400" size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black text-zinc-100 tracking-tighter">{alunos.filter(a => a.status !== 'inativo').length}</h3>
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Alunos Ativos</p>
                   </div>
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
-                    <CalendarDays className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">{eventos.length}</h3>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Eventos Cadastrados</p>
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group">
+                    <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                      <CalendarDays className="text-yellow-400" size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black text-zinc-100 tracking-tighter">{eventos.length}</h3>
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Eventos Cadastrados</p>
                   </div>
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl hover:border-yellow-400/30 transition-all group">
-                    <ShieldAlert className="text-yellow-400 mb-4 group-hover:scale-110 transition-transform" size={32} />
-                    <h3 className="text-4xl font-black text-zinc-100">{alunos.filter(a => a.status === 'inativo').length}</h3>
-                    <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">Alunos Inativos</p>
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group">
+                    <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                      <ShieldAlert className="text-yellow-400" size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black text-zinc-100 tracking-tighter">{alunos.filter(a => a.status === 'inativo').length}</h3>
+                    <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Alunos Inativos</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Aniversariantes do Dia */}
-                  <div className="bg-zinc-900 p-8 rounded-3xl border-2 border-yellow-400/30 shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden card-hover">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
                       <Cake size={80} />
                     </div>
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                      <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight">
-                        <Cake className="text-yellow-400" size={20} /> Aniversariantes de Hoje
+                    <div className="flex items-center justify-between mb-8 relative z-10">
+                      <h3 className="text-sm font-black flex items-center gap-3 uppercase tracking-[0.2em] text-zinc-400">
+                        <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
+                          <Cake className="text-yellow-400" size={16} />
+                        </div>
+                        Hoje
                       </h3>
                       <button 
                         onClick={() => setCurrentView('aniversariantes')}
                         className="text-[10px] font-black text-yellow-400 uppercase tracking-widest hover:underline"
                       >
-                        Ver Calendário
+                        Ver Todos
                       </button>
                     </div>
                     <div className="space-y-4 relative z-10">
@@ -1481,55 +1379,59 @@ export default function App() {
                           const today = new Date();
                           return parseInt(parts[0]) === today.getDate() && parseInt(parts[1]) === (today.getMonth() + 1);
                         }).slice(0, 3).map(aluno => (
-                          <div key={aluno.id} className="flex items-center justify-between p-4 bg-yellow-400/10 rounded-2xl border border-yellow-400/20 group hover:bg-yellow-400/20 transition-all">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center text-black font-black">
-                                {aluno.nome.charAt(0)}
+                          <div key={aluno.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:bg-yellow-400/10 hover:border-yellow-400/20 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-yellow-400 font-black overflow-hidden border border-white/5">
+                                {aluno.foto ? (
+                                  <img src={aluno.foto} alt={aluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  aluno.nome.charAt(0)
+                                )}
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-zinc-100">{aluno.nome}</p>
                                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{aluno.categoria}</p>
                               </div>
                             </div>
-                            <Trophy className="text-yellow-400 animate-bounce" size={18} />
+                            <div className="w-8 h-8 rounded-full bg-yellow-400/10 flex items-center justify-center text-yellow-400">
+                              <Trophy size={16} className="animate-pulse" />
+                            </div>
                           </div>
                         ))
                       ) : (
-                        <div className="py-12 text-center text-zinc-500 bg-zinc-800/20 rounded-2xl border border-dashed border-zinc-800 text-xs italic">
-                          Nenhum aniversariante hoje. Que tal planejar o próximo treino?
+                        <div className="py-12 text-center text-zinc-500 bg-white/5 rounded-2xl border border-dashed border-white/10 text-[10px] font-bold uppercase tracking-widest">
+                          Nenhum aniversariante hoje
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Próximos Eventos */}
-                  <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden card-hover">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
                       <Trophy size={80} />
                     </div>
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                      <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight">
-                        <Trophy className="text-yellow-400" size={20} /> Próximos Eventos
+                    <div className="flex items-center justify-between mb-8 relative z-10">
+                      <h3 className="text-sm font-black flex items-center gap-3 uppercase tracking-[0.2em] text-zinc-400">
+                        <div className="w-8 h-8 rounded-lg bg-yellow-400/10 flex items-center justify-center">
+                          <Trophy className="text-yellow-400" size={16} />
+                        </div>
+                        Agenda
                       </h3>
                       <button 
                         onClick={() => setCurrentView('eventos')}
                         className="text-[10px] font-black text-yellow-400 uppercase tracking-widest hover:underline"
                       >
-                        Ver Agenda
+                        Ver Todos
                       </button>
                     </div>
                     <div className="space-y-4 relative z-10">
                       {eventos.length > 0 ? (
                         eventos.slice(0, 3).map(evento => (
-                          <div key={evento.id} className="flex items-center justify-between p-4 bg-zinc-800/30 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-all">
+                          <div key={evento.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:bg-yellow-400/10 hover:border-yellow-400/20 transition-all">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex flex-col items-center justify-center text-yellow-400 leading-none">
-                                <span className="text-[10px] font-black">
-                                  {evento.dataInicio && evento.dataInicio.includes('-') ? evento.dataInicio.split('-')[2] : '--'}
-                                </span>
-                                <span className="text-[8px] font-bold uppercase">
-                                  {evento.dataInicio ? new Date(evento.dataInicio).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') : '---'}
-                                </span>
+                              <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-yellow-400 font-black border border-white/5">
+                                <CalendarDays size={20} />
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-zinc-100">{evento.nome}</p>
@@ -1542,7 +1444,7 @@ export default function App() {
                           </div>
                         ))
                       ) : (
-                        <div className="py-12 text-center text-zinc-500 bg-zinc-800/20 rounded-2xl border border-dashed border-zinc-800 text-xs italic">
+                        <div className="py-12 text-center text-zinc-500 bg-white/5 rounded-2xl border border-dashed border-white/10 text-[10px] font-bold uppercase tracking-widest">
                           Nenhum evento programado. Aproveite para organizar um amistoso!
                         </div>
                       )}
@@ -1616,16 +1518,32 @@ export default function App() {
                     }).map(aluno => (
                       <div key={aluno.id} className="bg-yellow-400 p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-yellow-400/20">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-black/10 flex items-center justify-center text-black font-black text-xl">
-                            {aluno.nome.charAt(0)}
+                          <div className="w-12 h-12 rounded-full bg-black/10 flex items-center justify-center text-black font-black text-xl overflow-hidden">
+                            {aluno.foto ? (
+                              <img src={aluno.foto} alt={aluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              aluno.nome.charAt(0)
+                            )}
                           </div>
                           <div>
                             <p className="font-black text-black uppercase text-sm">{aluno.nome}</p>
                             <p className="text-[10px] font-bold text-black/60 uppercase tracking-widest">{aluno.categoria}</p>
                           </div>
                         </div>
-                        <div className="text-black animate-bounce">
-                          <Trophy size={24} />
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setCelebratingAluno(aluno);
+                              setTimeout(() => handleGenerateInstaPost(aluno), 300);
+                            }}
+                            className="p-2 bg-black/10 rounded-xl text-black hover:bg-black/20 transition-all"
+                            title="Gerar Post Instagram"
+                          >
+                            <Instagram size={20} />
+                          </button>
+                          <div className="text-black animate-bounce">
+                            <Trophy size={24} />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1672,16 +1590,32 @@ export default function App() {
                     }).map(aluno => (
                       <div key={aluno.id} className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800 flex items-center justify-between hover:border-zinc-700 transition-all">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-yellow-400/10 flex items-center justify-center text-yellow-400 font-black">
-                            {aluno.dataNascimento.split('/')[0]}
+                          <div className="w-10 h-10 rounded-full bg-yellow-400/10 flex items-center justify-center text-yellow-400 font-black overflow-hidden">
+                            {aluno.foto ? (
+                              <img src={aluno.foto} alt={aluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              aluno.dataNascimento.split('/')[0]
+                            )}
                           </div>
                           <div>
                             <p className="font-bold text-sm">{aluno.nome}</p>
                             <p className="text-xs text-zinc-500">{aluno.categoria}</p>
                           </div>
                         </div>
-                        <div className="text-zinc-600">
-                          <Cake size={18} />
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setCelebratingAluno(aluno);
+                              setTimeout(() => handleGenerateInstaPost(aluno), 300);
+                            }}
+                            className="p-2 bg-zinc-700/50 rounded-xl text-zinc-400 hover:text-yellow-400 transition-all"
+                            title="Gerar Post Instagram"
+                          >
+                            <Instagram size={18} />
+                          </button>
+                          <div className="text-zinc-600">
+                            <Cake size={18} />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1975,35 +1909,28 @@ export default function App() {
 
                 <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2 uppercase tracking-tight">
-                    <ShieldCheck className="text-yellow-400" /> Sincronização Cloud (Supabase)
+                    <Database className="text-yellow-400" /> Backup de Dados
                   </h3>
-                  <div className="p-6 bg-zinc-800/30 rounded-2xl border border-zinc-800">
-                    <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-                      Utilize esta ferramenta para enviar todos os dados salvos localmente (SQLite) para o banco de dados na nuvem (Supabase). 
-                      Isso garante que seus dados estejam seguros e acessíveis de qualquer lugar.
-                    </p>
-                    <button 
-                      onClick={handleSyncSupabase}
-                      disabled={isSyncing}
-                      className={cn(
-                        "flex items-center gap-3 px-8 py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg",
-                        isSyncing 
-                          ? "bg-zinc-700 text-zinc-500 cursor-not-allowed" 
-                          : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
-                      )}
-                    >
-                      {isSyncing ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Sincronizando...
-                        </>
-                      ) : (
-                        <>
-                          <Plane size={20} />
-                          Sincronizar com Supabase
-                        </>
-                      )}
-                    </button>
+                  <div className="space-y-8">
+                    <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
+                      <h4 className="text-lg font-black text-zinc-100 mb-4">Exportar e Importar Dados</h4>
+                      <p className="text-zinc-400 mb-6 leading-relaxed">
+                        Você pode exportar todos os dados da nuvem para um arquivo de backup. 
+                        Isso garante que você tenha uma cópia de segurança das suas informações.
+                      </p>
+                      <div className="flex flex-wrap gap-4">
+                        <button 
+                          onClick={handleExport}
+                          className="bg-zinc-800 text-zinc-100 px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-zinc-700 transition-all border border-zinc-700 flex items-center gap-2"
+                        >
+                          <Download size={18} /> Exportar Backup
+                        </button>
+                        <label className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-400/20 cursor-pointer flex items-center gap-2">
+                          <Upload size={18} /> Importar Backup
+                          <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2865,20 +2792,24 @@ export default function App() {
                           key={aluno.id} 
                           onClick={async () => {
                             setSelectedAnamneseAluno(aluno);
-                            const res = await fetch(`/api/anamneses/${aluno.id}`);
-                            const data = await res.json();
-                            setAnamneseData(data || {
-                              horarioDormir: '',
-                              dificuldadeAcordar: false,
-                              tempoCelular: '',
-                              alimentaBem: false,
-                              frequenciaMedico: '',
-                              fraturas: '',
-                              tratamentoMedico: '',
-                              medicacaoControlada: '',
-                              outroExercicio: '',
-                              alergias: ''
-                            });
+                            const anamnese = await getDoc(doc(db, 'anamneses', aluno.id));
+                            if (anamnese.exists()) {
+                              setAnamneseData(anamnese.data());
+                            } else {
+                              setAnamneseData({
+                                horarioDormir: '',
+                                dificuldadeAcordar: false,
+                                tempoCelular: '',
+                                alimentaBem: false,
+                                frequenciaMedico: '',
+                                fraturas: '',
+                                tratamentoMedico: '',
+                                medicacaoControlada: '',
+                                outroExercicio: '',
+                                alergias: ''
+                              });
+                            }
+                            setCurrentView('anamnese');
                           }}
                           className="flex items-center justify-between p-6 bg-zinc-800/50 border border-zinc-800 rounded-2xl hover:border-yellow-400/50 transition-all group"
                         >
@@ -3504,9 +3435,17 @@ export default function App() {
               <div className="max-w-4xl mx-auto">
                 {!showDocPreview ? (
                   <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
-                    <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-                      <FileText className="text-yellow-400" /> Gerar Documento
-                    </h3>
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-xl font-bold flex items-center gap-2">
+                        <FileText className="text-yellow-400" /> Gerar Documento
+                      </h3>
+                      <button 
+                        onClick={() => setCurrentView('dashboard')}
+                        className="text-zinc-500 hover:text-white flex items-center gap-1 text-xs font-bold transition-colors"
+                      >
+                        <ChevronLeft size={16} /> Voltar ao Menu
+                      </button>
+                    </div>
 
                     {/* Seleção de Tipo de Documento */}
                     <div className="flex gap-4 mb-8">
@@ -3769,6 +3708,64 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Instagram Post Template (Hidden) */}
+        <div 
+          id="insta-post-template" 
+          className="fixed left-[-9999px] top-[-9999px] w-[1080px] h-[1080px] bg-black flex flex-col items-center justify-between p-20 text-white overflow-hidden"
+        >
+          {/* Background Decoration */}
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-yellow-400 rounded-full blur-[150px]" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yellow-400 rounded-full blur-[150px]" />
+          </div>
+
+          {/* Header */}
+          <div className="relative z-10 flex flex-col items-center gap-4">
+            <img src={clubShield} alt="Escudo" className="w-40 h-40 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+            <h2 className="text-6xl font-black uppercase tracking-[0.2em] text-yellow-400">Pirua E.C.</h2>
+          </div>
+
+          {/* Main Content */}
+          <div className="relative z-10 flex flex-col items-center gap-12 w-full">
+            <div className="relative">
+              <div className="w-[500px] h-[500px] rounded-full border-8 border-yellow-400 overflow-hidden shadow-[0_0_50px_rgba(250,204,21,0.3)]">
+                {celebratingAluno?.foto ? (
+                  <img src={celebratingAluno.foto} alt={celebratingAluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                ) : (
+                  <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                    <UserCircle size={200} className="text-zinc-700" />
+                  </div>
+                )}
+              </div>
+              <div className="absolute -bottom-6 -right-6 bg-yellow-400 text-black p-6 rounded-3xl shadow-2xl transform rotate-12">
+                <Cake size={60} />
+              </div>
+            </div>
+
+            <div className="text-center space-y-4">
+              <h1 className="text-8xl font-black uppercase tracking-tighter leading-none">
+                Feliz<br />
+                <span className="text-yellow-400">Aniversário!</span>
+              </h1>
+              <p className="text-4xl font-bold text-zinc-400 uppercase tracking-[0.3em]">
+                {celebratingAluno?.nome}
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="relative z-10 w-full flex justify-between items-end border-t border-white/10 pt-10">
+            <div className="flex items-center gap-3">
+              <Instagram className="text-yellow-400" size={32} />
+              <span className="text-2xl font-bold text-zinc-500">@pirua_esporte_clube</span>
+            </div>
+            <div className="text-right">
+              <p className="text-xl font-black uppercase text-yellow-400 tracking-widest">Formando Atletas</p>
+              <p className="text-lg font-bold text-zinc-600 uppercase">Transformando Vidas</p>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );

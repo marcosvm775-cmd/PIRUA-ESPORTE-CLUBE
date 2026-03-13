@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "Aluno": {
+      "title": "Aluno",
+      "description": "Cadastro de alunos da escolinha",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string", "description": "Nome completo do aluno" },
+        "dataNascimento": { "type": "string", "description": "Data de nascimento (DD/MM/AAAA)" },
+        "categoria": { "type": "string", "description": "Categoria (Sub-7, Sub-9, etc.)" },
+        "dataInscricao": { "type": "string", "description": "Data de inscrição" },
+        "status": { "type": "string", "description": "Status (Ativo/Inativo)" },
+        "foto": { "type": "string", "description": "URL da foto ou base64" },
+        "responsavel": { "type": "string", "description": "Nome do responsável" },
+        "telefone": { "type": "string", "description": "Telefone de contato" },
+        "endereco": { "type": "string", "description": "Endereço completo" },
+        "uid": { "type": "string", "description": "ID do usuário que criou o registro" }
+      },
+      "required": ["nome", "categoria", "uid"]
+    },
+    "Evento": {
+      "title": "Evento",
+      "description": "Eventos e agenda da escolinha",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string", "description": "Nome do evento" },
+        "dataInicio": { "type": "string", "description": "Data de início (YYYY-MM-DD)" },
+        "dataFim": { "type": "string", "description": "Data de término" },
+        "horario": { "type": "string", "description": "Horário do evento" },
+        "local": { "type": "string", "description": "Local do evento" },
+        "descricao": { "type": "string", "description": "Descrição detalhada" },
+        "tipo": { "type": "string", "description": "Tipo de evento (Treino, Jogo, Reunião)" },
+        "uid": { "type": "string", "description": "ID do usuário que criou o registro" }
+      },
+      "required": ["nome", "dataInicio", "uid"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Perfil do usuário/administrador",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/alunos/{alunoId}": {
+      "schema": "Aluno",
+      "description": "Coleção de alunos"
+    },
+    "/eventos/{eventoId}": {
+      "schema": "Evento",
+      "description": "Coleção de eventos"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Coleção de usuários"
+    }
+  }
+}
