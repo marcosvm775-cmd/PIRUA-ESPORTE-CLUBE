@@ -57,18 +57,14 @@ export const deleteDoc = async (docRef: any) => {
   setCollectionData(docRef.collectionName, filtered);
 };
 
-export const onSnapshot = (collectionName: string | any, callback: Callback, errorCallback?: (err: any) => void) => {
+export const onSnapshot = (collectionName: string | any, callback: Callback) => {
   const name = typeof collectionName === 'string' ? collectionName : collectionName.collectionName;
   if (!listeners[name]) listeners[name] = [];
   listeners[name].push(callback);
   
   // Initial call
-  try {
-    const data = getCollectionData(name);
-    callback({ docs: data.map((d: any) => ({ id: d.id, data: () => d })) });
-  } catch (err) {
-    if (errorCallback) errorCallback(err);
-  }
+  const data = getCollectionData(name);
+  callback({ docs: data.map((d: any) => ({ id: d.id, data: () => d })) });
   
   return () => {
     listeners[name] = listeners[name].filter(cb => cb !== callback);
@@ -89,23 +85,22 @@ export const getDoc = async (docRef: any) => {
 
 // Mock Auth
 export const auth = {
-  currentUser: { uid: 'local-user', email: 'admin@local', displayName: 'Administrador', photoURL: null }
+  currentUser: { uid: 'local-user', email: 'admin@local', displayName: 'Administrador' }
 };
 
 export const googleProvider = {};
 export const signInWithPopup = async () => ({ user: auth.currentUser });
 export const signInWithRedirect = async () => {};
-export const getRedirectResult = async (authInstance?: any) => null;
-export const signOut = async (authInstance?: any) => {
-  // In local mode, we don't really sign out
+export const getRedirectResult = async () => null;
+export const signOut = async () => {
+  // In local mode, maybe we don't even need sign out, but let's keep it
 };
-export const onAuthStateChanged = (authInstance: any, callback: (user: any) => void) => {
-  // Always return the mock user
-  setTimeout(() => callback(auth.currentUser), 0);
+export const onAuthStateChanged = (auth: any, callback: (user: any) => void) => {
+  callback(auth.currentUser);
   return () => {};
 };
 
-export const handleFirestoreError = (err: any, operation?: string, path?: string) => console.error(`[${operation}] Error at ${path}:`, err);
+export const handleFirestoreError = (err: any) => console.error(err);
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

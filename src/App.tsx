@@ -692,13 +692,65 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
   );
 };
 
-export default function App() {
+// --- Error Boundary ---
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center">
+          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mb-6">
+            <AlertTriangle size={40} />
+          </div>
+          <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Ops! Algo deu errado</h1>
+          <p className="text-zinc-500 max-w-md mb-8">
+            Ocorreu um erro inesperado no sistema. Tente recarregar a página ou entre em contato com o suporte.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-yellow-500 transition-all"
+          >
+            Recarregar Página
+          </button>
+          {process.env.NODE_ENV === 'development' && (
+            <pre className="mt-8 p-4 bg-zinc-900 rounded-xl text-left text-xs text-red-400 overflow-auto max-w-full">
+              {this.state.error?.toString()}
+            </pre>
+          )}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const AppContent = () => {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [instagramLink, setInstagramLink] = useState('https://www.instagram.com/pirua_esporte_clube/');
   const [whatsappLink, setWhatsappLink] = useState('https://wa.me/5537999999999');
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [currentView, setCurrentView] = useState<View>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
+      if (view === 'public_registration') return 'public_registration';
+    }
+    return 'dashboard';
+  });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -720,19 +772,7 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, 'users', currentUser.uid), {
-            displayName: currentUser.displayName,
-            email: currentUser.email,
-            photoURL: currentUser.photoURL,
-            role: currentUser.email === 'marcos.vm775@gmail.com' ? 'admin' : 'user'
-          });
-          setUserRole(currentUser.email === 'marcos.vm775@gmail.com' ? 'admin' : 'aluno');
-        } else {
-          const userData = userDoc.data();
-          setUserRole(userData.role === 'admin' ? 'admin' : 'aluno');
-        }
+        setUserRole('admin');
         setUser(currentUser);
       } else {
         setUser(null);
@@ -742,49 +782,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = async () => {
-    const isInIframe = window.self !== window.top;
-    
-    if (isInIframe) {
-      const confirmOpen = confirm("O login do Google não funciona dentro da visualização do AI Studio. Deseja abrir o aplicativo em uma nova aba para fazer login?");
-      if (confirmOpen) {
-        window.open(window.location.href, '_blank');
-      }
-      return;
-    }
-
-    try {
-      // For mobile, redirect is often more reliable
-      if (isMobile) {
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        await signInWithPopup(auth, googleProvider);
-      }
-    } catch (error: any) {
-      console.error("Erro ao fazer login:", error);
-      // Fallback to redirect if popup fails/is blocked
-      try {
-        await signInWithRedirect(auth, googleProvider);
-      } catch (redirectError) {
-        console.error("Erro ao fazer login com redirecionamento:", redirectError);
-        alert("Não foi possível abrir a janela de login. Por favor, verifique se o seu navegador está bloqueando popups ou tente abrir o link diretamente em uma nova aba do navegador.");
-      }
-    }
-  };
-
+  const handleLogin = async () => {};
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setCurrentView('dashboard');
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-    }
+    setCurrentView('dashboard');
   };
 
-  // --- Firebase Sync ---
+  // --- Sync ---
   useEffect(() => {
-    if (!user) return;
-
     const unsubAlunos = onSnapshot(collection(db, 'alunos'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aluno));
       setAlunos(data.length > 0 ? data : MOCK_ALUNOS);
@@ -856,7 +860,6 @@ export default function App() {
   }, [user, userRole]);
 
   const handleApproveSolicitacao = async (solicitacao: any) => {
-    if (!user) return;
     try {
       const alunoId = solicitacao.id;
       const { 
@@ -908,6 +911,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get('view');
+    console.log('Piruá Cloud - View Param:', viewParam);
     if (viewParam === 'public_registration') {
       setCurrentView('public_registration');
     }
@@ -958,16 +962,39 @@ export default function App() {
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
-    if (!confirm('Deseja realmente importar os dados? Isso substituirá os dados atuais na nuvem (se implementado).')) return;
+    if (!confirm('Deseja realmente importar os dados? Isso substituirá os dados atuais.')) return;
 
-    alert('Importação direta na nuvem não disponível via arquivo. Por favor, use o painel administrativo.');
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        
+        // Save to local storage using the keys from storage.ts
+        if (data.alunos) localStorage.setItem('pirua_alunos', JSON.stringify(data.alunos));
+        if (data.professores) localStorage.setItem('pirua_professores', JSON.stringify(data.professores));
+        if (data.eventos) localStorage.setItem('pirua_eventos', JSON.stringify(data.eventos));
+        if (data.presencas) localStorage.setItem('pirua_presencas', JSON.stringify(data.presencas));
+        if (data.eventLineups) localStorage.setItem('pirua_escalacoes', JSON.stringify(data.eventLineups));
+        
+        if (data.settings) {
+          if (data.settings.clubShield) localStorage.setItem('pirua_settings_clubShield', JSON.stringify({ value: data.settings.clubShield, updatedAt: new Date().toISOString() }));
+          if (data.settings.instagramLink) localStorage.setItem('pirua_settings_instagramLink', JSON.stringify({ value: data.settings.instagramLink, updatedAt: new Date().toISOString() }));
+          if (data.settings.whatsappLink) localStorage.setItem('pirua_settings_whatsappLink', JSON.stringify({ value: data.settings.whatsappLink, updatedAt: new Date().toISOString() }));
+        }
+        
+        alert('Dados importados com sucesso! A página será recarregada para aplicar as mudanças.');
+        window.location.reload();
+      } catch (error) {
+        console.error("Erro ao importar:", error);
+        alert('Erro ao importar dados. Verifique o formato do arquivo.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSaveAluno = async (aluno: Aluno) => {
-    if (!user) return;
-    
     // Normalize CPF
     if (aluno.rgCpf) {
       aluno.rgCpf = aluno.rgCpf.replace(/\D/g, '');
@@ -1012,7 +1039,6 @@ export default function App() {
   };
 
   const handleSaveSetting = async (key: string, value: string) => {
-    if (!user) return false;
     try {
       await setDoc(doc(db, 'settings', key), { value, updatedAt: new Date().toISOString() });
       return true;
@@ -1023,7 +1049,6 @@ export default function App() {
   };
 
   const handleSaveProfessor = async (professor: Professor) => {
-    if (!user) return;
     try {
       await setDoc(doc(db, 'professores', professor.id), { ...professor, uid: user.uid }, { merge: true });
       alert('Professor salvo com sucesso na nuvem!');
@@ -1033,7 +1058,6 @@ export default function App() {
   };
 
   const handleSaveEvento = async (evento: Evento) => {
-    if (!user) return;
     try {
       await setDoc(doc(db, 'eventos', evento.id), { ...evento, uid: user.uid }, { merge: true });
       alert('Evento salvo com sucesso na nuvem!');
@@ -1043,7 +1067,7 @@ export default function App() {
   };
 
   const handleSaveAnamnese = async (anamneseData: any) => {
-    if (!selectedAnamneseAluno || !user) return;
+    if (!selectedAnamneseAluno) return;
     try {
       await setDoc(doc(db, 'anamneses', selectedAnamneseAluno.id), {
         ...anamneseData,
@@ -1059,7 +1083,6 @@ export default function App() {
   };
 
   const handleSaveEscalacao = async (eventoId: string, lista: string[]) => {
-    if (!user) return;
     try {
       await setDoc(doc(db, 'escalacoes', eventoId), {
         eventoId,
@@ -1165,6 +1188,10 @@ export default function App() {
             }
 
             /* Forçar o container da carteirinha a ser fiel ao design */
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
             #carteirinha-atleta {
               display: flex !important;
               flex-direction: column !important;
@@ -1189,11 +1216,28 @@ export default function App() {
             .bg-yellow-400 { background-color: #facc15 !important; }
             .bg-zinc-950 { background-color: #09090b !important; }
             .bg-zinc-900 { background-color: #18181b !important; }
+            .bg-black { background-color: #000000 !important; }
+            .bg-white { background-color: #ffffff !important; }
             .text-black { color: #000000 !important; }
             .text-white { color: #ffffff !important; }
             .text-yellow-400 { color: #facc15 !important; }
             .text-zinc-300 { color: #d4d4d8 !important; }
             .text-zinc-500 { color: #71717a !important; }
+            
+            /* Ajustes de layout para o tamanho físico */
+            .flex { display: flex !important; }
+            .flex-col { flex-direction: column !important; }
+            .justify-between { justify-content: space-between !important; }
+            .items-center { align-items: center !important; }
+            .items-end { align-items: flex-end !important; }
+            .w-full { width: 100% !important; }
+            .h-full { height: 100% !important; }
+            .rounded-full { border-radius: 9999px !important; }
+            .overflow-hidden { overflow: hidden !important; }
+            .relative { position: relative !important; }
+            .absolute { position: absolute !important; }
+            
+            img { max-width: 100%; height: auto; }
           </style>
         </head>
         <body>
@@ -1232,35 +1276,60 @@ export default function App() {
     setIsGeneratingPDF(true);
     try {
       const canvas = await html2canvas(element, { 
-        scale: 2,
+        scale: 4,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#09090b',
         logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        imageTimeout: 15000,
         onclone: (clonedDoc) => {
           const el = clonedDoc.getElementById(elementId);
           if (el) {
+            // Force styles on the cloned element
+            el.style.width = '324px';
+            el.style.height = '204px';
             el.style.opacity = '1';
             el.style.transform = 'none';
             el.style.boxShadow = 'none';
             el.style.margin = '0';
             el.style.display = 'flex';
-            el.style.backgroundColor = '#09090b';
+            el.style.backgroundColor = '#09090b'; // Zinc 950
+            el.style.color = '#ffffff';
+            el.style.borderRadius = '12px';
+            el.style.border = '2px solid #facc15';
             
-            // Ensure all text is visible
-            const texts = el.querySelectorAll('p, span');
-            texts.forEach(t => {
-              const htmlT = t as HTMLElement;
-              if (htmlT.classList.contains('text-white')) htmlT.style.color = '#ffffff';
-              if (htmlT.classList.contains('text-yellow-400')) htmlT.style.color = '#facc15';
-              if (htmlT.classList.contains('text-zinc-300')) htmlT.style.color = '#d4d4d8';
-              if (htmlT.classList.contains('text-black')) htmlT.style.color = '#000000';
+            // Force all children to have correct colors
+            const allElements = el.querySelectorAll('*');
+            allElements.forEach(item => {
+              const htmlItem = item as HTMLElement;
+              
+              // Force text colors
+              if (htmlItem.classList.contains('text-white')) htmlItem.style.color = '#ffffff';
+              if (htmlItem.classList.contains('text-yellow-400')) htmlItem.style.color = '#facc15';
+              if (htmlItem.classList.contains('text-zinc-300')) htmlItem.style.color = '#d4d4d8';
+              if (htmlItem.classList.contains('text-zinc-500')) htmlItem.style.color = '#71717a';
+              if (htmlItem.classList.contains('text-black')) htmlItem.style.color = '#000000';
+              
+              // Force background colors
+              if (htmlItem.classList.contains('bg-yellow-400')) htmlItem.style.backgroundColor = '#facc15';
+              if (htmlItem.classList.contains('bg-zinc-950')) htmlItem.style.backgroundColor = '#09090b';
+              if (htmlItem.classList.contains('bg-zinc-900')) htmlItem.style.backgroundColor = '#18181b';
+              if (htmlItem.classList.contains('bg-black')) htmlItem.style.backgroundColor = '#000000';
+              if (htmlItem.classList.contains('bg-white')) htmlItem.style.backgroundColor = '#ffffff';
+              
+              // Ensure images are visible
+              if (htmlItem.tagName === 'IMG') {
+                (htmlItem as HTMLImageElement).style.opacity = '1';
+                (htmlItem as HTMLImageElement).style.display = 'block';
+              }
             });
           }
         }
       });
       
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/png', 1.0);
       const pdf = new jsPDF('l', 'mm', 'a4');
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -1270,7 +1339,7 @@ export default function App() {
       const imgHeight = canvas.height;
       const ratio = imgHeight / imgWidth;
       
-      let finalWidth = pdfWidth - 40; // Margins
+      let finalWidth = pdfWidth - 40; 
       let finalHeight = finalWidth * ratio;
       
       if (finalHeight > pdfHeight - 40) {
@@ -1281,11 +1350,11 @@ export default function App() {
       const x = (pdfWidth - finalWidth) / 2;
       const y = (pdfHeight - finalHeight) / 2;
       
-      pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+      pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
       pdf.save(`${filename.replace(/\s+/g, '_').toLowerCase()}.pdf`);
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Erro ao gerar o PDF. Tente novamente.");
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o PDF. Por favor, tente novamente. Detalhes: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -1322,7 +1391,6 @@ export default function App() {
   };
 
   const handleSaveChamada = async () => {
-    if (!user) return;
     const date = new Date().toISOString().split('T')[0];
     const lista = Object.entries(presencas).map(([alunoId, status]) => ({ alunoId, status }));
     
@@ -1348,7 +1416,6 @@ export default function App() {
   };
 
   const handlePresence = async (alunoId: string, status: 'presente' | 'falta' | 'justificado') => {
-    if (!user) return;
     const date = new Date().toISOString().split('T')[0];
     const id = `${date}_${alunoId}`;
     try {
@@ -1490,48 +1557,6 @@ export default function App() {
     );
   }
 
-  if (!user && currentView !== 'public_registration') {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-yellow-400/20 blur-[120px] rounded-full"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yellow-400/10 blur-[120px] rounded-full"></div>
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full text-center relative z-10"
-        >
-          <img src={currentShield} alt="Logo" className="w-32 h-32 mx-auto mb-8 drop-shadow-[0_0_20px_rgba(250,204,21,0.3)]" />
-          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">Piruá <span className="text-yellow-400">Cloud</span></h1>
-          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mb-12">Gestão Esportiva em Tempo Real</p>
-          
-          <div className="bg-zinc-900/50 p-8 rounded-3xl border border-white/5 backdrop-blur-xl shadow-2xl">
-            <p className="text-zinc-400 text-sm mb-8">Conecte-se para sincronizar seus dados entre PC e Celular.</p>
-            <button 
-              onClick={handleLogin}
-              className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all flex items-center justify-center gap-3 shadow-lg shadow-yellow-400/20"
-            >
-              <Cloud size={20} /> Entrar com Google
-            </button>
-
-            {window.self !== window.top && (
-              <button 
-                onClick={() => window.open(window.location.href, '_blank')}
-                className="w-full mt-4 bg-zinc-800 text-white font-bold py-3 rounded-2xl hover:bg-zinc-700 transition-all flex items-center justify-center gap-3 border border-white/5"
-              >
-                <Share2 size={18} /> Abrir em Nova Aba
-              </button>
-            )}
-          </div>
-          
-          <p className="mt-12 text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">© 2026 Piruá Esporte Clube</p>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-zinc-950 font-sans text-zinc-100 overflow-hidden relative">
       {/* Mobile Menu Overlay */}
@@ -1547,12 +1572,13 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
-      <aside className={cn(
-        "bg-zinc-900 border-r border-zinc-800 flex flex-col p-6 shrink-0 transition-all duration-300 relative z-[70] lg:static fixed inset-y-0 left-0",
-        isSidebarCollapsed ? "w-20 p-4" : "w-72",
-        !isMobileMenuOpen && "-translate-x-full lg:translate-x-0"
-      )}>
+      {/* Sidebar - Hidden on public registration */}
+      {currentView !== 'public_registration' && (
+        <aside className={cn(
+          "bg-zinc-900 border-r border-zinc-800 flex flex-col p-6 shrink-0 transition-all duration-300 relative z-[70] lg:static fixed inset-y-0 left-0",
+          isSidebarCollapsed ? "w-20 p-4" : "w-72",
+          !isMobileMenuOpen && "-translate-x-full lg:translate-x-0"
+        )}>
         <button 
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           className="absolute -right-3 top-10 bg-yellow-400 text-black rounded-full p-1 shadow-lg z-50 hover:scale-110 transition-transform hidden lg:block"
@@ -1797,87 +1823,95 @@ export default function App() {
           )}
         </div>
       </aside>
+      )}
 
-      {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-4 pb-safe pt-2 z-[60] flex items-center justify-around">
-        <BottomNavItem 
-          icon={LayoutDashboard} 
-          label="Início" 
-          active={currentView === 'dashboard'} 
-          onClick={() => setCurrentView('dashboard')} 
-        />
-        <BottomNavItem 
-          icon={Users} 
-          label="Alunos" 
-          active={currentView === 'lista_alunos'} 
-          onClick={() => setCurrentView('lista_alunos')} 
-        />
-        <BottomNavItem 
-          icon={CheckSquare} 
-          label="Chamada" 
-          active={currentView === 'chamada'} 
-          onClick={() => setCurrentView('chamada')} 
-        />
-        <BottomNavItem 
-          icon={CalendarDays} 
-          label="Eventos" 
-          active={currentView === 'eventos'} 
-          onClick={() => setCurrentView('eventos')} 
-        />
-        <BottomNavItem 
-          icon={Menu} 
-          label="Menu" 
-          active={isMobileMenuOpen} 
-          onClick={() => setIsMobileMenuOpen(true)} 
-          badge={solicitacoes.length > 0 ? solicitacoes.length : undefined}
-        />
-      </div>
+      {/* Mobile Bottom Navigation - Hidden on public registration */}
+      {currentView !== 'public_registration' && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-4 pb-safe pt-2 z-[60] flex items-center justify-around">
+          <BottomNavItem 
+            icon={LayoutDashboard} 
+            label="Início" 
+            active={currentView === 'dashboard'} 
+            onClick={() => setCurrentView('dashboard')} 
+          />
+          <BottomNavItem 
+            icon={Users} 
+            label="Alunos" 
+            active={currentView === 'lista_alunos'} 
+            onClick={() => setCurrentView('lista_alunos')} 
+          />
+          <BottomNavItem 
+            icon={CheckSquare} 
+            label="Chamada" 
+            active={currentView === 'chamada'} 
+            onClick={() => setCurrentView('chamada')} 
+          />
+          <BottomNavItem 
+            icon={CalendarDays} 
+            label="Eventos" 
+            active={currentView === 'eventos'} 
+            onClick={() => setCurrentView('eventos')} 
+          />
+          <BottomNavItem 
+            icon={Menu} 
+            label="Menu" 
+            active={isMobileMenuOpen} 
+            onClick={() => setIsMobileMenuOpen(true)} 
+            badge={solicitacoes.length > 0 ? solicitacoes.length : undefined}
+          />
+        </div>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pb-24 lg:pb-8">
-        {/* Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400"
-            >
-              <Menu size={24} />
-            </button>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-100 uppercase tracking-tight">
-                {currentView === 'meu_perfil' ? 'Meu Perfil' : 
-                 currentView === 'presenca_evento' ? 'Presença em Evento' : 
-                 currentView === 'cadastrar_professor' ? 'Cadastrar Professor' :
-                 currentView.replace('_', ' ')}
-              </h2>
-              <p className="text-zinc-500 text-xs md:text-sm mt-1">Gestão Piruá Esporte Clube • {new Date().toLocaleDateString('pt-BR')}</p>
+      <main className={cn(
+        "flex-1 overflow-y-auto p-4 md:p-8 relative pb-24 lg:pb-8",
+        currentView === 'public_registration' && "p-0 pb-0 lg:pb-0"
+      )}>
+        {/* Header - Hidden on public registration */}
+        {currentView !== 'public_registration' && (
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <button 
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="lg:hidden p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400"
+              >
+                <Menu size={24} />
+              </button>
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black text-zinc-100 uppercase tracking-tight">
+                  {currentView === 'meu_perfil' ? 'Meu Perfil' : 
+                   currentView === 'presenca_evento' ? 'Presença em Evento' : 
+                   currentView === 'cadastrar_professor' ? 'Cadastrar Professor' :
+                   currentView.replace('_', ' ')}
+                </h2>
+                <p className="text-zinc-500 text-xs md:text-sm mt-1">Gestão Piruá Esporte Clube • {new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:flex-none">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-              <input 
-                type="text" 
-                placeholder="Buscar..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-full md:w-64 transition-all text-sm"
-              />
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="relative flex-1 md:flex-none">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-full md:w-64 transition-all text-sm"
+                />
+              </div>
+              <button 
+                onClick={() => userRole === 'admin' && setCurrentView('solicitacoes_cadastro')}
+                className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400 relative"
+              >
+                <Bell size={20} />
+                {solicitacoes.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] text-[8px] font-black bg-red-500 text-white rounded-full animate-pulse">
+                    {solicitacoes.length}
+                  </span>
+                )}
+              </button>
             </div>
-            <button 
-              onClick={() => userRole === 'admin' && setCurrentView('solicitacoes_cadastro')}
-              className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400 relative"
-            >
-              <Bell size={20} />
-              {solicitacoes.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] text-[8px] font-black bg-red-500 text-white rounded-full animate-pulse">
-                  {solicitacoes.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* View Content */}
         <AnimatePresence mode="wait">
@@ -1888,7 +1922,7 @@ export default function App() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            {userRole === 'aluno' && !['cadastrar_aluno', 'anamnese', 'carteirinha', 'escalacao'].includes(currentView) && (
+            {userRole === 'aluno' && !['cadastrar_aluno', 'anamnese', 'carteirinha', 'escalacao', 'public_registration'].includes(currentView) && (
               <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
                 <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500">
                   <Lock size={32} />
@@ -1978,8 +2012,9 @@ export default function App() {
                     <p className="text-zinc-400 max-w-xl font-medium mb-6">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
                     <button 
                       onClick={() => {
-                        const url = `${window.location.origin}${window.location.pathname}?view=public_registration`;
-                        navigator.clipboard.writeText(url);
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('view', 'public_registration');
+                        navigator.clipboard.writeText(url.toString());
                         alert('Link de cadastro copiado para a área de transferência!');
                       }}
                       className="bg-yellow-400 text-black px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-400/20"
@@ -4448,5 +4483,13 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+};
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 }
