@@ -6,6 +6,26 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Mobile App Optimizations */
+html, body {
+  overscroll-behavior-y: none; /* Desabilita o "puxar para atualizar" */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; /* Evita seleção de texto acidental */
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Permitir seleção apenas em inputs */
+input, textarea {
+  user-select: text !important;
+}
+
 body, input, select, textarea, button {
   text-transform: uppercase;
   font-family: var(--font-sans);

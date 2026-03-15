@@ -349,6 +349,7 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
     telefone: '',
     rgCpf: '',
     responsavelRgCpf: '',
+    telefoneResponsavel: '',
     endereco: '',
     bairro: '',
     cidade: '',
@@ -367,9 +368,20 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
     alergias: ''
   });
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, foto: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!formData.nome || !formData.telefone) {
-      alert('Por favor, preencha pelo menos o nome e o telefone.');
+    if (!formData.nome || !formData.telefone || !formData.responsavel) {
+      alert('Por favor, preencha pelo menos o nome, telefone e o responsável.');
       return;
     }
     setLoading(true);
@@ -393,7 +405,7 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
 
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8 flex flex-col items-center">
-      <div className="max-w-2xl w-full">
+      <div className="max-w-3xl w-full">
         <div className="text-center mb-12">
           <img src={ESCUDO_URL} alt="Logo" className="w-24 h-24 mx-auto mb-6" />
           <h1 className="text-3xl font-black uppercase tracking-tighter">Ficha de <span className="text-yellow-400">Cadastro</span></h1>
@@ -404,82 +416,215 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
           <div className="flex gap-2 mb-8">
             <div className={cn("h-1 flex-1 rounded-full transition-all", step >= 1 ? "bg-yellow-400" : "bg-zinc-800")}></div>
             <div className={cn("h-1 flex-1 rounded-full transition-all", step >= 2 ? "bg-yellow-400" : "bg-zinc-800")}></div>
+            <div className={cn("h-1 flex-1 rounded-full transition-all", step >= 3 ? "bg-yellow-400" : "bg-zinc-800")}></div>
           </div>
 
           {step === 1 ? (
             <div className="space-y-6">
               <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
-                <User className="text-yellow-400" /> Dados Pessoais
+                <User className="text-yellow-400" /> Dados do Aluno
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label>
-                  <input 
-                    type="text" 
-                    value={formData.nome}
-                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    placeholder="Nome do Aluno"
-                  />
+              
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="shrink-0 space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">Foto 3x4</label>
+                  <div className="relative group">
+                    <div className={cn(
+                      "w-32 h-40 bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
+                      formData.foto && "border-solid border-yellow-400"
+                    )}>
+                      {formData.foto ? (
+                        <img src={formData.foto} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center p-4">
+                          <IdCard className="text-zinc-600 mx-auto mb-2" size={32} />
+                          <p className="text-[10px] text-zinc-500 font-bold uppercase leading-tight">Clique para subir</p>
+                        </div>
+                      )}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Data de Nascimento</label>
-                  <input 
-                    type="text" 
-                    value={formData.dataNascimento}
-                    onChange={(e) => setFormData({...formData, dataNascimento: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    placeholder="DD/MM/AAAA"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
-                  <select 
-                    value={formData.categoria}
-                    onChange={(e) => setFormData({...formData, categoria: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                  >
-                    <option value="">Selecione...</option>
-                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Posição</label>
-                  <input 
-                    type="text" 
-                    value={formData.posicao}
-                    onChange={(e) => setFormData({...formData, posicao: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    placeholder="Ex: Goleiro, Atacante"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome do Responsável</label>
-                  <input 
-                    type="text" 
-                    value={formData.responsavel}
-                    onChange={(e) => setFormData({...formData, responsavel: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    placeholder="Nome do Pai ou Mãe"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Telefone de Contato</label>
-                  <input 
-                    type="text" 
-                    value={formData.telefone}
-                    onChange={(e) => setFormData({...formData, telefone: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    placeholder="(00) 00000-0000"
-                  />
+
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label>
+                    <input 
+                      type="text" 
+                      value={formData.nome}
+                      onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Nome do Aluno"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Data de Nascimento</label>
+                    <input 
+                      type="date" 
+                      value={formData.dataNascimento}
+                      onChange={(e) => setFormData({...formData, dataNascimento: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">RG / CPF</label>
+                    <input 
+                      type="text" 
+                      value={formData.rgCpf}
+                      onChange={(e) => setFormData({...formData, rgCpf: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
+                    <select 
+                      value={formData.categoria}
+                      onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    >
+                      <option value="">Selecione...</option>
+                      {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Posição</label>
+                    <input 
+                      type="text" 
+                      value={formData.posicao}
+                      onChange={(e) => setFormData({...formData, posicao: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Ex: Goleiro, Atacante"
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Telefone do Aluno (opcional)</label>
+                    <input 
+                      type="text" 
+                      value={formData.telefone}
+                      onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
                 </div>
               </div>
+
               <button 
                 onClick={() => setStep(2)}
                 className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all mt-8"
               >
-                Próximo Passo: Anamnese
+                Próximo Passo: Endereço e Responsável
               </button>
+            </div>
+          ) : step === 2 ? (
+            <div className="space-y-8">
+              <div className="space-y-6">
+                <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
+                  <MapPin className="text-yellow-400" /> Endereço
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Endereço Completo</label>
+                    <input 
+                      type="text" 
+                      value={formData.endereco}
+                      onChange={(e) => setFormData({...formData, endereco: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Rua, número, complemento"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Bairro</label>
+                    <input 
+                      type="text" 
+                      value={formData.bairro}
+                      onChange={(e) => setFormData({...formData, bairro: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Bairro"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
+                    <input 
+                      type="text" 
+                      value={formData.cidade}
+                      onChange={(e) => setFormData({...formData, cidade: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Cidade"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">UF</label>
+                    <input 
+                      type="text" 
+                      value={formData.uf}
+                      onChange={(e) => setFormData({...formData, uf: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Estado"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
+                  <Users className="text-yellow-400" /> Dados do Responsável
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome do Responsável</label>
+                    <input 
+                      type="text" 
+                      value={formData.responsavel}
+                      onChange={(e) => setFormData({...formData, responsavel: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="Nome do Pai ou Mãe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">RG / CPF do Responsável</label>
+                    <input 
+                      type="text" 
+                      value={formData.responsavelRgCpf}
+                      onChange={(e) => setFormData({...formData, responsavelRgCpf: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Telefone do Responsável</label>
+                    <input 
+                      type="text" 
+                      value={formData.telefoneResponsavel}
+                      onChange={(e) => setFormData({...formData, telefoneResponsavel: e.target.value})}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-8">
+                <button 
+                  onClick={() => setStep(1)}
+                  className="flex-1 bg-zinc-800 text-white font-black py-4 rounded-2xl hover:bg-zinc-700 transition-all"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={() => setStep(3)}
+                  className="flex-[2] bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all"
+                >
+                  Próximo Passo: Anamnese
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -526,7 +671,7 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
               </div>
               <div className="flex gap-4 mt-8">
                 <button 
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="flex-1 bg-zinc-800 text-white font-black py-4 rounded-2xl hover:bg-zinc-700 transition-all"
                 >
                   Voltar
@@ -970,122 +1115,166 @@ export default function App() {
     const element = document.getElementById(elementId);
     if (!element) return;
 
-    // Create a hidden iframe for printing
-    let printFrame = document.getElementById('print-frame') as HTMLIFrameElement;
-    if (!printFrame) {
-      printFrame = document.createElement('iframe');
-      printFrame.id = 'print-frame';
-      printFrame.style.position = 'fixed';
-      printFrame.style.right = '0';
-      printFrame.style.bottom = '0';
-      printFrame.style.width = '0';
-      printFrame.style.height = '0';
-      printFrame.style.border = '0';
-      document.body.appendChild(printFrame);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor, permita pop-ups para imprimir.');
+      return;
     }
 
+    // Get only essential styles or force a clean slate
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map(s => s.outerHTML)
       .join('');
 
-    const content = `
+    printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Impressão - Piruá E.C.</title>
+          <title>Piruá E.C. - Carteirinha</title>
           ${styles}
           <style>
-            @media print {
-              @page { margin: 5mm; }
-              body { background: white !important; color: black !important; padding: 0; margin: 0; }
-              .print-hidden { display: none !important; }
-              * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            }
-            body { font-family: sans-serif; background: white; color: black; padding: 20px; display: flex; justify-content: center; }
-            .print-container { width: 100%; max-width: 800px; }
-            /* Specific overrides for printing to ensure visibility */
-            #carteirinha-atleta { 
-              box-shadow: none !important; 
-              border: 2px solid #facc15 !important;
+            /* Reset total para impressão */
+            html, body { 
+              background: white !important; 
+              color: black !important; 
+              margin: 0 !important; 
+              padding: 0 !important; 
+              width: 100% !important;
+              height: 100% !important;
+              -webkit-print-color-adjust: exact !important; 
               print-color-adjust: exact !important;
-              -webkit-print-color-adjust: exact !important;
             }
+            
+            body {
+              display: flex !important;
+              justify-content: center !important;
+              align-items: center !important;
+              background-color: white !important;
+            }
+
+            @media print {
+              @page { 
+                margin: 0; 
+                size: auto;
+              }
+              body { 
+                padding: 0;
+                background: white !important;
+              }
+              .no-print { display: none !important; }
+            }
+
+            /* Forçar o container da carteirinha a ser fiel ao design */
+            #carteirinha-atleta {
+              display: flex !important;
+              flex-direction: column !important;
+              width: 85.6mm !important;
+              height: 53.98mm !important;
+              min-width: 85.6mm !important;
+              min-height: 53.98mm !important;
+              background-color: #09090b !important; /* Zinc 950 */
+              color: white !important;
+              border: 0.5mm solid #facc15 !important; /* Yellow 400 */
+              border-radius: 3.18mm !important;
+              overflow: hidden !important;
+              box-shadow: none !important;
+              transform: none !important;
+              opacity: 1 !important;
+              visibility: visible !important;
+              position: relative !important;
+              margin: 0 !important;
+            }
+
+            /* Garantir que as cores internas apareçam */
             .bg-yellow-400 { background-color: #facc15 !important; }
-            .text-black { color: black !important; }
             .bg-zinc-950 { background-color: #09090b !important; }
-            .text-white { color: white !important; }
+            .bg-zinc-900 { background-color: #18181b !important; }
+            .text-black { color: #000000 !important; }
+            .text-white { color: #ffffff !important; }
+            .text-yellow-400 { color: #facc15 !important; }
+            .text-zinc-300 { color: #d4d4d8 !important; }
+            .text-zinc-500 { color: #71717a !important; }
           </style>
         </head>
         <body>
-          <div class="print-container">
+          <div style="padding: 20px; background: white;">
             ${element.outerHTML}
           </div>
+          <script>
+            const images = document.getElementsByTagName('img');
+            const imagePromises = Array.from(images).map(img => {
+              if (img.complete) return Promise.resolve();
+              return new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+              });
+            });
+
+            Promise.all(imagePromises).then(() => {
+              setTimeout(() => {
+                window.print();
+                // window.close();
+              }, 1000);
+            });
+          </script>
         </body>
       </html>
-    `;
-
-    const doc = printFrame.contentDocument || printFrame.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(content);
-    doc.close();
-
-    const doPrint = () => {
-      printFrame.contentWindow?.focus();
-      printFrame.contentWindow?.print();
-    };
-
-    // Wait for content and images to load
-    printFrame.onload = () => {
-      setTimeout(doPrint, 500);
-    };
-
-    // Fallback for browsers that don't trigger onload for doc.write
-    setTimeout(doPrint, 1000);
+    `);
+    printWindow.document.close();
   };
+
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const handleDownload = async (elementId: string, filename: string) => {
     const element = document.getElementById(elementId);
-    if (!element) return;
+    if (!element || isGeneratingPDF) return;
     
+    setIsGeneratingPDF(true);
     try {
-      // Temporarily remove shadow and scale for better capture
-      const originalStyle = element.style.cssText;
-      element.style.boxShadow = 'none';
-      element.style.transform = 'none';
-      
       const canvas = await html2canvas(element, { 
-        scale: 3, // Higher scale for better quality
+        scale: 2,
         useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#09090b',
         logging: false,
-        backgroundColor: null, // Transparent background
-        allowTaint: true
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById(elementId);
+          if (el) {
+            el.style.opacity = '1';
+            el.style.transform = 'none';
+            el.style.boxShadow = 'none';
+            el.style.margin = '0';
+            el.style.display = 'flex';
+            el.style.backgroundColor = '#09090b';
+            
+            // Ensure all text is visible
+            const texts = el.querySelectorAll('p, span');
+            texts.forEach(t => {
+              const htmlT = t as HTMLElement;
+              if (htmlT.classList.contains('text-white')) htmlT.style.color = '#ffffff';
+              if (htmlT.classList.contains('text-yellow-400')) htmlT.style.color = '#facc15';
+              if (htmlT.classList.contains('text-zinc-300')) htmlT.style.color = '#d4d4d8';
+              if (htmlT.classList.contains('text-black')) htmlT.style.color = '#000000';
+            });
+          }
+        }
       });
-      
-      // Restore original style
-      element.style.cssText = originalStyle;
       
       const imgData = canvas.toDataURL('image/png');
-      
-      // Calculate PDF dimensions based on element aspect ratio
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = imgHeight / imgWidth;
-      
-      const pdf = new jsPDF({
-        orientation: ratio > 1 ? 'p' : 'l',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const pdf = new jsPDF('l', 'mm', 'a4');
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      let finalWidth = pdfWidth - 20; // 10mm margin
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = imgHeight / imgWidth;
+      
+      let finalWidth = pdfWidth - 40; // Margins
       let finalHeight = finalWidth * ratio;
       
-      if (finalHeight > pdfHeight - 20) {
-        finalHeight = pdfHeight - 20;
+      if (finalHeight > pdfHeight - 40) {
+        finalHeight = pdfHeight - 40;
         finalWidth = finalHeight / ratio;
       }
       
@@ -1093,10 +1282,12 @@ export default function App() {
       const y = (pdfHeight - finalHeight) / 2;
       
       pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
-      pdf.save(`${filename.replace(/\s+/g, '_')}.pdf`);
+      pdf.save(`${filename.replace(/\s+/g, '_').toLowerCase()}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("Erro ao gerar PDF. Por favor, tente novamente.");
+      alert("Erro ao gerar o PDF. Tente novamente.");
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
   const [selectedAluno, setSelectedAluno] = useState<Aluno | null>(null);
@@ -3590,84 +3781,88 @@ export default function App() {
                       id="carteirinha-atleta"
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="relative w-full aspect-[1.58/1] bg-zinc-950 rounded-2xl border-2 border-yellow-400 overflow-hidden shadow-2xl"
+                      className="relative w-[324px] h-[204px] bg-zinc-950 rounded-[3.18mm] border-[0.5mm] border-yellow-400 overflow-hidden shadow-2xl mx-auto flex flex-col"
                     >
                       {/* Top Bar */}
-                      <div className="absolute top-0 left-0 w-full h-10 bg-yellow-400 flex items-center px-4 justify-between">
-                        <div className="flex items-center gap-2">
-                          <img src={currentShield} alt="Logo" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
-                          <span className="text-black font-black text-[10px] tracking-tighter">PIRUÁ ESPORTE CLUBE</span>
+                      <div className="w-full h-8 bg-yellow-400 flex items-center px-3 justify-between shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <img src={currentShield} alt="Logo" className="w-5 h-5 object-contain" referrerPolicy="no-referrer" />
+                          <span className="text-black font-black text-[8px] tracking-tighter">PIRUÁ ESPORTE CLUBE</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {selectedAluno.numeroCamisa && (
-                            <div className="bg-black px-2 py-0.5 rounded text-[8px] font-black text-white uppercase">Nº {selectedAluno.numeroCamisa}</div>
+                            <div className="bg-black px-1.5 py-0.5 rounded-[0.5mm] text-[7px] font-black text-white uppercase">Nº {selectedAluno.numeroCamisa}</div>
                           )}
-                          <div className="bg-black px-2 py-0.5 rounded text-[8px] font-black text-yellow-400 uppercase">Atleta</div>
+                          <div className="bg-black px-1.5 py-0.5 rounded-[0.5mm] text-[7px] font-black text-yellow-400 uppercase">Atleta</div>
                         </div>
                       </div>
 
-                      <div className="mt-12 px-4 flex gap-4">
+                      <div className="flex-1 px-3 py-2 flex gap-3 overflow-hidden">
                         {/* Photo Area */}
-                        <div className="w-24 h-32 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 overflow-hidden flex items-center justify-center relative">
+                        <div className="w-20 h-26 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 overflow-hidden flex items-center justify-center relative">
                           {selectedAluno.foto ? (
                             <img src={selectedAluno.foto} alt={selectedAluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
                             <div className="flex flex-col items-center gap-1">
-                              <UserCircle size={40} className="text-zinc-700" />
-                              <span className="text-[6px] text-zinc-600 font-bold uppercase">Sem Foto</span>
+                              <UserCircle size={32} className="text-zinc-700" />
+                              <span className="text-[5px] text-zinc-600 font-bold uppercase">Sem Foto</span>
                             </div>
                           )}
-                          <div className="absolute bottom-0 left-0 w-full bg-yellow-400/90 py-1 text-center">
-                            <span className="text-[8px] font-black text-black uppercase">{selectedAluno.categoria}</span>
+                          <div className="absolute bottom-0 left-0 w-full bg-yellow-400/90 py-0.5 text-center">
+                            <span className="text-[7px] font-black text-black uppercase">{selectedAluno.categoria}</span>
                           </div>
                         </div>
 
                         {/* Data Area */}
-                        <div className="flex-1 space-y-2 py-1">
-                          <div>
-                            <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Nome Completo</p>
-                            <p className="text-[11px] font-black uppercase text-white leading-tight">{selectedAluno.nome}</p>
+                        <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                          <div className="space-y-1">
+                            <div>
+                              <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Nome Completo</p>
+                              <p className="text-[9px] font-black uppercase text-white leading-tight truncate">{selectedAluno.nome}</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1">
+                              <div>
+                                <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Nascimento</p>
+                                <p className="text-[8px] font-bold text-white">{selectedAluno.dataNascimento}</p>
+                              </div>
+                              <div>
+                                <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">RG / CPF</p>
+                                <p className="text-[8px] font-bold text-white truncate">{selectedAluno.rgCpf || '---'}</p>
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Endereço</p>
+                              <p className="text-[7px] font-medium text-zinc-300 leading-tight truncate">
+                                {selectedAluno.endereco}
+                              </p>
+                              <p className="text-[7px] font-medium text-zinc-300 leading-tight truncate">
+                                {selectedAluno.bairro} - {selectedAluno.cidade}/{selectedAluno.uf}
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1">
+                              <div>
+                                <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Responsável</p>
+                                <p className="text-[7px] font-bold text-white truncate">{selectedAluno.responsavel}</p>
+                              </div>
+                              <div>
+                                <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Telefone</p>
+                                <p className="text-[7px] font-bold text-white">{selectedAluno.telefone}</p>
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="flex justify-between items-end">
                             <div>
-                              <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Nascimento</p>
-                              <p className="text-[10px] font-bold text-white">{selectedAluno.dataNascimento}</p>
-                            </div>
-                            <div>
-                              <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">RG / CPF</p>
-                              <p className="text-[10px] font-bold text-white">{selectedAluno.rgCpf || '---'}</p>
-                            </div>
-                          </div>
-
-                          <div>
-                            <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Endereço Completo</p>
-                            <p className="text-[9px] font-medium text-zinc-300 leading-tight">
-                              {selectedAluno.endereco}, {selectedAluno.bairro}<br />
-                              {selectedAluno.cidade} - {selectedAluno.uf}
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Responsável</p>
-                              <p className="text-[9px] font-bold text-white truncate">{selectedAluno.responsavel}</p>
-                            </div>
-                            <div>
-                              <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Telefone</p>
-                              <p className="text-[9px] font-bold text-white">{selectedAluno.telefone}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-between items-end pt-1">
-                            <div>
-                              <p className="text-[7px] font-black text-yellow-400 uppercase tracking-widest">Matrícula</p>
-                              <p className="text-[10px] font-bold text-white">#{selectedAluno.id.toString().padStart(5, '0')}</p>
+                              <p className="text-[6px] font-black text-yellow-400 uppercase tracking-widest">Matrícula</p>
+                              <p className="text-[8px] font-bold text-white">#{selectedAluno.id.toString().slice(-5)}</p>
                             </div>
                             <div className="bg-white p-0.5 rounded shadow-sm">
                               <QRCodeSVG 
                                 value={`https://piruaec.com.br/atleta/${selectedAluno.id}`}
-                                size={24}
+                                size={20}
                                 level="L"
                                 includeMargin={false}
                               />
@@ -3677,9 +3872,9 @@ export default function App() {
                       </div>
 
                       {/* Bottom Bar */}
-                      <div className="absolute bottom-0 left-0 w-full h-6 bg-zinc-900 border-t border-zinc-800 flex items-center px-4 justify-between">
-                        <span className="text-zinc-500 font-bold text-[7px] uppercase tracking-widest">Documento de Identificação Interna</span>
-                        <span className="text-zinc-500 font-bold text-[7px] uppercase">Válido até 12/2026</span>
+                      <div className="w-full h-5 bg-zinc-900 border-t border-zinc-800 flex items-center px-3 justify-between shrink-0">
+                        <span className="text-zinc-500 font-bold text-[6px] uppercase tracking-widest">ID INTERNO</span>
+                        <span className="text-zinc-500 font-bold text-[6px] uppercase">Válido até 12/2026</span>
                       </div>
                     </motion.div>
                   )}
@@ -3694,9 +3889,10 @@ export default function App() {
                       </button>
                       <button 
                         onClick={() => handleDownload('carteirinha-atleta', `carteirinha-${selectedAluno?.nome}`)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-yellow-400 text-black py-3 rounded-xl font-black hover:bg-yellow-500 transition-all"
+                        disabled={isGeneratingPDF}
+                        className="flex-1 flex items-center justify-center gap-2 bg-yellow-400 text-black py-3 rounded-xl font-black hover:bg-yellow-500 transition-all disabled:opacity-50"
                       >
-                        <Download size={18} /> Baixar PDF
+                        <Download size={18} /> {isGeneratingPDF ? 'Gerando...' : 'Baixar PDF'}
                       </button>
                     </div>
                   )}
