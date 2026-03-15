@@ -104,14 +104,44 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidAluno(request.resource.data);
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin()) && isValidAluno(request.resource.data);
-      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /anamneses/{alunoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() || isAdmin();
+    }
+
+    match /professores/{professorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     match /eventos/{eventoId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidEvento(request.resource.data);
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin()) && isValidEvento(request.resource.data);
-      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /escalacoes/{eventoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /presencas/{presencaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /solicitacoes_cadastro/{id} {
+      allow create: if true;
+      allow read, delete: if isAdmin();
     }
 
     match /{path=**} {

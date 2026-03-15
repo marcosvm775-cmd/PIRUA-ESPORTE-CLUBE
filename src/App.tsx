@@ -17,6 +17,8 @@ import {
   IdCard, 
   Layers,
   Search,
+  Share2,
+  User,
   MoreVertical,
   ChevronRight,
   Trophy,
@@ -55,9 +57,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDoc, handleFirestoreError, OperationType } from './firebase.ts';
+import { auth, db, googleProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDoc, handleFirestoreError, OperationType } from './firebase.ts';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -84,7 +86,9 @@ type View =
   | 'meu_perfil'
   | 'configuracoes'
   | 'relatorios'
-  | 'aniversariantes';
+  | 'aniversariantes'
+  | 'public_registration'
+  | 'solicitacoes_cadastro';
 
 interface Aluno {
   id: string;
@@ -277,7 +281,7 @@ const ESCUDO_URL = `data:image/svg+xml;utf8,${encodeURIComponent(`
 
 // --- Components ---
 
-const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed, isMobile }: { icon: any, label: string, active: boolean, onClick: () => void, collapsed?: boolean, isMobile?: boolean }) => (
+const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed, isMobile, badge }: { icon: any, label: string, active: boolean, onClick: () => void, collapsed?: boolean, isMobile?: boolean, badge?: number }) => (
   <button 
     onClick={onClick}
     className={cn(
@@ -298,26 +302,250 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, collapsed, isMobile }
     )}
     <Icon size={20} className={cn("shrink-0 relative z-10 transition-transform duration-300", active ? "scale-110" : "group-hover:scale-110")} />
     {(!collapsed || isMobile) && <span className="text-xs font-bold uppercase tracking-wider relative z-10 truncate">{label}</span>}
+    {badge !== undefined && badge > 0 && (
+      <span className={cn(
+        "absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-black rounded-full z-20",
+        active ? "bg-black text-yellow-400" : "bg-red-500 text-white"
+      )}>
+        {badge}
+      </span>
+    )}
   </button>
 );
 
-const BottomNavItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: () => void }) => (
+const BottomNavItem = ({ icon: Icon, label, active, onClick, badge }: { icon: any, label: string, active: boolean, onClick: () => void, badge?: number }) => (
   <button 
     onClick={onClick}
     className={cn(
-      "flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all duration-300",
+      "flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all duration-300 relative",
       active ? "text-yellow-400" : "text-zinc-500"
     )}
   >
     <div className={cn(
-      "p-2 rounded-xl transition-all duration-300",
+      "p-2 rounded-xl transition-all duration-300 relative",
       active ? "bg-yellow-400/10 scale-110" : ""
     )}>
       <Icon size={20} />
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] text-[8px] font-black bg-red-500 text-white rounded-full">
+          {badge}
+        </span>
+      )}
     </div>
     <span className="text-[8px] font-black uppercase tracking-tighter">{label}</span>
   </button>
 );
+
+const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    nome: '',
+    idade: '',
+    categoria: '',
+    posicao: '',
+    dataNascimento: '',
+    responsavel: '',
+    telefone: '',
+    rgCpf: '',
+    responsavelRgCpf: '',
+    endereco: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+    foto: '',
+    // Anamnese fields
+    horarioDormir: '',
+    dificuldadeAcordar: false,
+    tempoCelular: '',
+    alimentaBem: false,
+    frequenciaMedico: '',
+    fraturas: '',
+    tratamentoMedico: '',
+    medicacaoControlada: '',
+    outroExercicio: '',
+    alergias: ''
+  });
+
+  const handleSubmit = async () => {
+    if (!formData.nome || !formData.telefone) {
+      alert('Por favor, preencha pelo menos o nome e o telefone.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const id = Date.now().toString();
+      await setDoc(doc(db, 'solicitacoes_cadastro', id), {
+        ...formData,
+        id,
+        status: 'pendente',
+        createdAt: new Date().toISOString()
+      });
+      alert('Solicitação enviada com sucesso! Aguarde o contato do clube.');
+      onComplete();
+    } catch (error) {
+      console.error("Erro ao enviar solicitação:", error);
+      alert('Erro ao enviar solicitação. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white p-4 md:p-8 flex flex-col items-center">
+      <div className="max-w-2xl w-full">
+        <div className="text-center mb-12">
+          <img src={ESCUDO_URL} alt="Logo" className="w-24 h-24 mx-auto mb-6" />
+          <h1 className="text-3xl font-black uppercase tracking-tighter">Ficha de <span className="text-yellow-400">Cadastro</span></h1>
+          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs mt-2">Piruá Esporte Clube</p>
+        </div>
+
+        <div className="bg-zinc-900/50 p-8 rounded-3xl border border-white/5 backdrop-blur-xl shadow-2xl">
+          <div className="flex gap-2 mb-8">
+            <div className={cn("h-1 flex-1 rounded-full transition-all", step >= 1 ? "bg-yellow-400" : "bg-zinc-800")}></div>
+            <div className={cn("h-1 flex-1 rounded-full transition-all", step >= 2 ? "bg-yellow-400" : "bg-zinc-800")}></div>
+          </div>
+
+          {step === 1 ? (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
+                <User className="text-yellow-400" /> Dados Pessoais
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label>
+                  <input 
+                    type="text" 
+                    value={formData.nome}
+                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    placeholder="Nome do Aluno"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Data de Nascimento</label>
+                  <input 
+                    type="text" 
+                    value={formData.dataNascimento}
+                    onChange={(e) => setFormData({...formData, dataNascimento: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    placeholder="DD/MM/AAAA"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
+                  <select 
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                  >
+                    <option value="">Selecione...</option>
+                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Posição</label>
+                  <input 
+                    type="text" 
+                    value={formData.posicao}
+                    onChange={(e) => setFormData({...formData, posicao: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    placeholder="Ex: Goleiro, Atacante"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome do Responsável</label>
+                  <input 
+                    type="text" 
+                    value={formData.responsavel}
+                    onChange={(e) => setFormData({...formData, responsavel: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    placeholder="Nome do Pai ou Mãe"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Telefone de Contato</label>
+                  <input 
+                    type="text" 
+                    value={formData.telefone}
+                    onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={() => setStep(2)}
+                className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all mt-8"
+              >
+                Próximo Passo: Anamnese
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold flex items-center gap-2 mb-6">
+                <ShieldAlert className="text-yellow-400" /> Ficha de Anamnese
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Horário que costuma dormir</label>
+                  <input 
+                    type="text" 
+                    value={formData.horarioDormir}
+                    onChange={(e) => setFormData({...formData, horarioDormir: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Tempo de uso de celular/games</label>
+                  <input 
+                    type="text" 
+                    value={formData.tempoCelular}
+                    onChange={(e) => setFormData({...formData, tempoCelular: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Alergias</label>
+                  <input 
+                    type="text" 
+                    value={formData.alergias}
+                    onChange={(e) => setFormData({...formData, alergias: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Medicação Controlada</label>
+                  <input 
+                    type="text" 
+                    value={formData.medicacaoControlada}
+                    onChange={(e) => setFormData({...formData, medicacaoControlada: e.target.value})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-4 mt-8">
+                <button 
+                  onClick={() => setStep(1)}
+                  className="flex-1 bg-zinc-800 text-white font-black py-4 rounded-2xl hover:bg-zinc-700 transition-all"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex-[2] bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all disabled:opacity-50"
+                >
+                  {loading ? 'Enviando...' : 'Finalizar Cadastro'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
@@ -340,6 +568,11 @@ export default function App() {
 
   // --- Firebase Auth ---
   useEffect(() => {
+    // Handle redirect result
+    getRedirectResult(auth).catch((error) => {
+      console.error("Erro ao processar redirecionamento:", error);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -365,10 +598,32 @@ export default function App() {
   }, []);
 
   const handleLogin = async () => {
+    const isInIframe = window.self !== window.top;
+    
+    if (isInIframe) {
+      const confirmOpen = confirm("O login do Google não funciona dentro da visualização do AI Studio. Deseja abrir o aplicativo em uma nova aba para fazer login?");
+      if (confirmOpen) {
+        window.open(window.location.href, '_blank');
+      }
+      return;
+    }
+
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+      // For mobile, redirect is often more reliable
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
+    } catch (error: any) {
       console.error("Erro ao fazer login:", error);
+      // Fallback to redirect if popup fails/is blocked
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch (redirectError) {
+        console.error("Erro ao fazer login com redirecionamento:", redirectError);
+        alert("Não foi possível abrir a janela de login. Por favor, verifique se o seu navegador está bloqueando popups ou tente abrir o link diretamente em uma nova aba do navegador.");
+      }
     }
   };
 
@@ -443,7 +698,75 @@ export default function App() {
     };
   }, [user]);
 
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user && userRole === 'admin') {
+      const unsubSolicitacoes = onSnapshot(collection(db, 'solicitacoes_cadastro'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        setSolicitacoes(data);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'solicitacoes_cadastro'));
+      return () => unsubSolicitacoes();
+    }
+  }, [user, userRole]);
+
+  const handleApproveSolicitacao = async (solicitacao: any) => {
+    if (!user) return;
+    try {
+      const alunoId = solicitacao.id;
+      const { 
+        horarioDormir, dificuldadeAcordar, tempoCelular, alimentaBem, 
+        frequenciaMedico, fraturas, tratamentoMedico, medicacaoControlada, 
+        outroExercicio, alergias, ...alunoData 
+      } = solicitacao;
+      
+      await setDoc(doc(db, 'alunos', alunoId), {
+        ...alunoData,
+        status: 'ativo',
+        uid: user.uid
+      });
+
+      await setDoc(doc(db, 'anamneses', alunoId), {
+        alunoId,
+        horarioDormir,
+        dificuldadeAcordar,
+        tempoCelular,
+        alimentaBem,
+        frequenciaMedico,
+        fraturas,
+        tratamentoMedico,
+        medicacaoControlada,
+        outroExercicio,
+        alergias,
+        updatedAt: new Date().toISOString(),
+        uid: user.uid
+      });
+
+      await deleteDoc(doc(db, 'solicitacoes_cadastro', solicitacao.id));
+      alert('Cadastro aprovado e aluno criado com sucesso!');
+    } catch (error) {
+      console.error("Erro ao aprovar cadastro:", error);
+      alert('Erro ao aprovar cadastro.');
+    }
+  };
+
+  const handleRejectSolicitacao = async (id: string) => {
+    if (!confirm('Deseja realmente excluir esta solicitação?')) return;
+    try {
+      await deleteDoc(doc(db, 'solicitacoes_cadastro', id));
+      alert('Solicitação removida.');
+    } catch (error) {
+      alert('Erro ao remover solicitação.');
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    if (viewParam === 'public_registration') {
+      setCurrentView('public_registration');
+    }
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -672,26 +995,29 @@ export default function App() {
           ${styles}
           <style>
             @media print {
-              @page { margin: 10mm; }
+              @page { margin: 5mm; }
               body { background: white !important; color: black !important; padding: 0; margin: 0; }
               .print-hidden { display: none !important; }
               * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             }
-            body { font-family: sans-serif; background: white; color: black; padding: 20px; }
-            .hidden { display: block !important; }
-            .print\\:block { display: block !important; }
-            .print\\:hidden { display: none !important; }
-            .bg-zinc-900, .bg-zinc-950 { background-color: white !important; }
-            .text-white, .text-zinc-100 { color: black !important; }
-            .text-zinc-400, .text-zinc-500 { color: #666 !important; }
-            .border-zinc-800 { border-color: #eee !important; }
-            .rounded-3xl, .rounded-2xl { border-radius: 8px !important; }
-            canvas { max-width: 100% !important; height: auto !important; }
+            body { font-family: sans-serif; background: white; color: black; padding: 20px; display: flex; justify-content: center; }
+            .print-container { width: 100%; max-width: 800px; }
+            /* Specific overrides for printing to ensure visibility */
+            #carteirinha-atleta { 
+              box-shadow: none !important; 
+              border: 2px solid #facc15 !important;
+              print-color-adjust: exact !important;
+              -webkit-print-color-adjust: exact !important;
+            }
+            .bg-yellow-400 { background-color: #facc15 !important; }
+            .text-black { color: black !important; }
+            .bg-zinc-950 { background-color: #09090b !important; }
+            .text-white { color: white !important; }
           </style>
         </head>
         <body>
           <div class="print-container">
-            ${element.innerHTML}
+            ${element.outerHTML}
           </div>
         </body>
       </html>
@@ -704,19 +1030,18 @@ export default function App() {
     doc.write(content);
     doc.close();
 
-    // Wait for content to load
-    printFrame.onload = () => {
-      setTimeout(() => {
-        printFrame.contentWindow?.focus();
-        printFrame.contentWindow?.print();
-      }, 500);
-    };
-
-    // If already loaded (for browsers that don't trigger onload for doc.write)
-    setTimeout(() => {
+    const doPrint = () => {
       printFrame.contentWindow?.focus();
       printFrame.contentWindow?.print();
-    }, 1000);
+    };
+
+    // Wait for content and images to load
+    printFrame.onload = () => {
+      setTimeout(doPrint, 500);
+    };
+
+    // Fallback for browsers that don't trigger onload for doc.write
+    setTimeout(doPrint, 1000);
   };
 
   const handleDownload = async (elementId: string, filename: string) => {
@@ -724,24 +1049,54 @@ export default function App() {
     if (!element) return;
     
     try {
+      // Temporarily remove shadow and scale for better capture
+      const originalStyle = element.style.cssText;
+      element.style.boxShadow = 'none';
+      element.style.transform = 'none';
+      
       const canvas = await html2canvas(element, { 
-        scale: 2,
+        scale: 3, // Higher scale for better quality
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: null, // Transparent background
+        allowTaint: true
       });
       
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      // Restore original style
+      element.style.cssText = originalStyle;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${filename}.pdf`);
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Calculate PDF dimensions based on element aspect ratio
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = imgHeight / imgWidth;
+      
+      const pdf = new jsPDF({
+        orientation: ratio > 1 ? 'p' : 'l',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      let finalWidth = pdfWidth - 20; // 10mm margin
+      let finalHeight = finalWidth * ratio;
+      
+      if (finalHeight > pdfHeight - 20) {
+        finalHeight = pdfHeight - 20;
+        finalWidth = finalHeight / ratio;
+      }
+      
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
+      
+      pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+      pdf.save(`${filename.replace(/\s+/g, '_')}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("Erro ao gerar PDF. Tente novamente.");
+      alert("Erro ao gerar PDF. Por favor, tente novamente.");
     }
   };
   const [selectedAluno, setSelectedAluno] = useState<Aluno | null>(null);
@@ -944,7 +1299,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user && currentView !== 'public_registration') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
@@ -969,6 +1324,15 @@ export default function App() {
             >
               <Cloud size={20} /> Entrar com Google
             </button>
+
+            {window.self !== window.top && (
+              <button 
+                onClick={() => window.open(window.location.href, '_blank')}
+                className="w-full mt-4 bg-zinc-800 text-white font-bold py-3 rounded-2xl hover:bg-zinc-700 transition-all flex items-center justify-center gap-3 border border-white/5"
+              >
+                <Share2 size={18} /> Abrir em Nova Aba
+              </button>
+            )}
           </div>
           
           <p className="mt-12 text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">© 2026 Piruá Esporte Clube</p>
@@ -1065,6 +1429,15 @@ export default function App() {
                 onClick={() => { setCurrentView('cadastrar_aluno'); setIsMobileMenuOpen(false); }} 
                 collapsed={isSidebarCollapsed}
                 isMobile={isMobile}
+              />
+              <SidebarItem 
+                icon={UserCheck} 
+                label="Solicitações" 
+                active={currentView === 'solicitacoes_cadastro'} 
+                onClick={() => { setCurrentView('solicitacoes_cadastro'); setIsMobileMenuOpen(false); }} 
+                collapsed={isSidebarCollapsed}
+                isMobile={isMobile}
+                badge={solicitacoes.length > 0 ? solicitacoes.length : undefined}
               />
               <SidebarItem 
                 icon={ShieldCheck} 
@@ -1212,7 +1585,25 @@ export default function App() {
                 <p className="text-xs text-zinc-500 truncate">{userRole === 'admin' ? 'Piruá E.C.' : loggedInAluno?.categoria}</p>
               </div>
             )}
+            {!isSidebarCollapsed && (
+              <button 
+                onClick={handleLogout}
+                className="p-2 text-zinc-500 hover:text-red-500 transition-colors"
+                title="Sair"
+              >
+                <LogOut size={20} />
+              </button>
+            )}
           </div>
+          {isSidebarCollapsed && (
+            <button 
+              onClick={handleLogout}
+              className="w-full flex justify-center p-2 text-zinc-500 hover:text-red-500 transition-colors"
+              title="Sair"
+            >
+              <LogOut size={20} />
+            </button>
+          )}
         </div>
       </aside>
 
@@ -1247,6 +1638,7 @@ export default function App() {
           label="Menu" 
           active={isMobileMenuOpen} 
           onClick={() => setIsMobileMenuOpen(true)} 
+          badge={solicitacoes.length > 0 ? solicitacoes.length : undefined}
         />
       </div>
 
@@ -1282,9 +1674,16 @@ export default function App() {
                 className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-full md:w-64 transition-all text-sm"
               />
             </div>
-            <button className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400 relative">
+            <button 
+              onClick={() => userRole === 'admin' && setCurrentView('solicitacoes_cadastro')}
+              className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-yellow-400 relative"
+            >
               <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-yellow-400 rounded-full border-2 border-zinc-900"></span>
+              {solicitacoes.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] text-[8px] font-black bg-red-500 text-white rounded-full animate-pulse">
+                  {solicitacoes.length}
+                </span>
+              )}
             </button>
           </div>
         </header>
@@ -1308,6 +1707,74 @@ export default function App() {
               </div>
             )}
 
+            {currentView === 'public_registration' && (
+              <PublicRegistrationForm onComplete={() => setCurrentView('dashboard')} />
+            )}
+
+            {currentView === 'solicitacoes_cadastro' && (
+              <div className="space-y-8">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <UserPlus className="text-yellow-400" /> Solicitações de Cadastro
+                  </h3>
+                  <button 
+                    onClick={() => setCurrentView('dashboard')}
+                    className="text-zinc-500 hover:text-white flex items-center gap-1 text-xs font-bold transition-colors"
+                  >
+                    <ChevronLeft size={16} /> Voltar
+                  </button>
+                </div>
+
+                {solicitacoes.length === 0 ? (
+                  <div className="bg-zinc-900 p-12 rounded-3xl border border-zinc-800 text-center">
+                    <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Nenhuma solicitação pendente</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {solicitacoes.map(sol => (
+                      <div key={sol.id} className="glass p-6 rounded-3xl border border-white/5 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-lg font-bold text-zinc-100">{sol.nome}</h4>
+                            <p className="text-xs text-zinc-500 uppercase font-black tracking-widest">{sol.categoria} • {sol.posicao}</p>
+                          </div>
+                          <div className="bg-yellow-400/10 text-yellow-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                            Pendente
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-zinc-500 uppercase font-black tracking-tighter mb-1">Responsável</p>
+                            <p className="font-bold">{sol.responsavel}</p>
+                          </div>
+                          <div>
+                            <p className="text-zinc-500 uppercase font-black tracking-tighter mb-1">Telefone</p>
+                            <p className="font-bold">{sol.telefone}</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/5 flex gap-3">
+                          <button 
+                            onClick={() => handleApproveSolicitacao(sol)}
+                            className="flex-1 bg-yellow-400 text-black font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-yellow-500 transition-all"
+                          >
+                            Aprovar
+                          </button>
+                          <button 
+                            onClick={() => handleRejectSolicitacao(sol.id)}
+                            className="flex-1 bg-zinc-800 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-red-500 transition-all"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {currentView === 'dashboard' && userRole === 'admin' && (
               <div className="space-y-8">
                 <div className="glass p-10 rounded-3xl border border-white/5 shadow-2xl flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
@@ -1317,16 +1784,33 @@ export default function App() {
                   </div>
                   <div className="relative z-10">
                     <h3 className="text-3xl font-black text-yellow-400 uppercase tracking-tight mb-2 text-glow">Bem-vindo ao Piruá E.C.</h3>
-                    <p className="text-zinc-400 max-w-xl font-medium">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
+                    <p className="text-zinc-400 max-w-xl font-medium mb-6">Sistema de gestão oficial. Aqui você controla cadastros, presenças e eventos do clube com a força da nossa fênix.</p>
+                    <button 
+                      onClick={() => {
+                        const url = `${window.location.origin}${window.location.pathname}?view=public_registration`;
+                        navigator.clipboard.writeText(url);
+                        alert('Link de cadastro copiado para a área de transferência!');
+                      }}
+                      className="bg-yellow-400 text-black px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-400/20"
+                    >
+                      <Share2 size={16} /> Compartilhar Link de Cadastro
+                    </button>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group">
+                  <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group cursor-pointer" onClick={() => setCurrentView('solicitacoes_cadastro')}>
                     <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                      <Users className="text-yellow-400" size={24} />
+                      <UserPlus className="text-yellow-400" size={24} />
                     </div>
-                    <h3 className="text-4xl font-black text-zinc-100 tracking-tighter">{alunos.filter(a => a.status !== 'inativo').length}</h3>
+                    <h3 className="text-4xl font-black text-zinc-100 tracking-tighter flex items-center gap-3">
+                      {alunos.filter(a => a.status !== 'inativo').length}
+                      {solicitacoes.length > 0 && (
+                        <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-full animate-pulse uppercase tracking-widest">
+                          {solicitacoes.length} novos
+                        </span>
+                      )}
+                    </h3>
                     <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Alunos Ativos</p>
                   </div>
                   <div className="glass p-8 rounded-3xl border border-white/5 shadow-xl card-hover group">
