@@ -743,6 +743,7 @@ const AppContent = () => {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [instagramLink, setInstagramLink] = useState('https://www.instagram.com/pirua_esporte_clube/');
   const [whatsappLink, setWhatsappLink] = useState('https://wa.me/5537999999999');
+  const [chamadaCategory, setChamadaCategory] = useState<string>('Sub-11');
   const [currentView, setCurrentView] = useState<View>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -964,27 +965,42 @@ const AppContent = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('Deseja realmente importar os dados? Isso substituirá os dados atuais.')) return;
+    if (!confirm('Atenção: A importação irá substituir os dados atuais na nuvem pelos dados do arquivo selecionado. Deseja continuar?')) return;
 
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
         
-        // Save to local storage using the keys from storage.ts
-        if (data.alunos) localStorage.setItem('pirua_alunos', JSON.stringify(data.alunos));
-        if (data.professores) localStorage.setItem('pirua_professores', JSON.stringify(data.professores));
-        if (data.eventos) localStorage.setItem('pirua_eventos', JSON.stringify(data.eventos));
-        if (data.presencas) localStorage.setItem('pirua_presencas', JSON.stringify(data.presencas));
-        if (data.eventLineups) localStorage.setItem('pirua_escalacoes', JSON.stringify(data.eventLineups));
-        
+        // Import Alunos to Firestore
+        if (data.alunos && Array.isArray(data.alunos)) {
+          for (const aluno of data.alunos) {
+            await setDoc(doc(db, 'alunos', aluno.id), aluno, { merge: true });
+          }
+        }
+
+        // Import Professores to Firestore
+        if (data.professores && Array.isArray(data.professores)) {
+          for (const prof of data.professores) {
+            await setDoc(doc(db, 'professores', prof.id), prof, { merge: true });
+          }
+        }
+
+        // Import Eventos to Firestore
+        if (data.eventos && Array.isArray(data.eventos)) {
+          for (const evento of data.eventos) {
+            await setDoc(doc(db, 'eventos', evento.id), evento, { merge: true });
+          }
+        }
+
+        // Import Settings to Firestore
         if (data.settings) {
-          if (data.settings.clubShield) localStorage.setItem('pirua_settings_clubShield', JSON.stringify({ value: data.settings.clubShield, updatedAt: new Date().toISOString() }));
-          if (data.settings.instagramLink) localStorage.setItem('pirua_settings_instagramLink', JSON.stringify({ value: data.settings.instagramLink, updatedAt: new Date().toISOString() }));
-          if (data.settings.whatsappLink) localStorage.setItem('pirua_settings_whatsappLink', JSON.stringify({ value: data.settings.whatsappLink, updatedAt: new Date().toISOString() }));
+          if (data.settings.clubShield) await handleSaveSetting('clubShield', data.settings.clubShield);
+          if (data.settings.instagramLink) await handleSaveSetting('instagramLink', data.settings.instagramLink);
+          if (data.settings.whatsappLink) await handleSaveSetting('whatsappLink', data.settings.whatsappLink);
         }
         
-        alert('Dados importados com sucesso! A página será recarregada para aplicar as mudanças.');
+        alert('Dados importados e sincronizados com a nuvem com sucesso!');
         window.location.reload();
       } catch (error) {
         console.error("Erro ao importar:", error);
@@ -1126,11 +1142,49 @@ const AppContent = () => {
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = imgData;
-      link.download = `parabens-${aluno.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.download = `parabens-quadrado-${aluno.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
       link.click();
     } catch (error) {
       console.error("Error generating Instagram post:", error);
       alert('Erro ao gerar imagem para o Instagram');
+    }
+  };
+
+  const handleGenerateBirthdayCard = async (aluno: Aluno) => {
+    const element = document.getElementById('birthday-card-template');
+    if (!element || !aluno) return;
+
+    // Wait a bit for React to render the new state
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Wait for all images in the template to load
+    const images = element.getElementsByTagName('img');
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve;
+      });
+    });
+    await Promise.all(imagePromises);
+    
+    try {
+      const canvas = await html2canvas(element, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#000000',
+        logging: false,
+        allowTaint: true
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = `parabens-story-${aluno.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.click();
+    } catch (error) {
+      console.error('Erro ao gerar cartão:', error);
+      alert('Erro ao gerar a imagem. Tente novamente.');
     }
   };
 
@@ -1149,11 +1203,25 @@ const AppContent = () => {
       .map(s => s.outerHTML)
       .join('');
 
+    // Clone the element to remove any motion-related inline styles that might interfere
+    const clonedElement = element.cloneNode(true) as HTMLElement;
+    clonedElement.classList.remove('hidden');
+    clonedElement.classList.remove('print:block');
+    clonedElement.style.transform = 'none';
+    clonedElement.style.opacity = '1';
+    clonedElement.style.visibility = 'visible';
+    
+    if (elementId === 'carteirinha-atleta') {
+      clonedElement.style.display = 'flex';
+    } else {
+      clonedElement.style.display = 'block';
+    }
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Piruá E.C. - Carteirinha</title>
+          <title>Piruá E.C. - Impressão</title>
           ${styles}
           <style>
             /* Reset total para impressão */
@@ -1169,15 +1237,13 @@ const AppContent = () => {
             }
             
             body {
-              display: flex !important;
-              justify-content: center !important;
-              align-items: center !important;
+              display: block !important;
               background-color: white !important;
             }
 
             @media print {
               @page { 
-                margin: 0; 
+                margin: 10mm; 
                 size: auto;
               }
               body { 
@@ -1185,6 +1251,22 @@ const AppContent = () => {
                 background: white !important;
               }
               .no-print { display: none !important; }
+            }
+
+            /* Estilos para Tabela de Escalação */
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              margin-bottom: 20px !important;
+            }
+            th, td {
+              border: 1px solid #000 !important;
+              padding: 8px !important;
+              text-align: left !important;
+            }
+            th {
+              background-color: #f0f0f0 !important;
+              font-weight: bold !important;
             }
 
             /* Forçar o container da carteirinha a ser fiel ao design */
@@ -1209,7 +1291,7 @@ const AppContent = () => {
               opacity: 1 !important;
               visibility: visible !important;
               position: relative !important;
-              margin: 0 !important;
+              margin: auto !important;
             }
 
             /* Garantir que as cores internas apareçam */
@@ -1238,11 +1320,18 @@ const AppContent = () => {
             .absolute { position: absolute !important; }
             
             img { max-width: 100%; height: auto; }
+            
+            /* Ensure the printed element is visible */
+            #${elementId} {
+              display: ${elementId === 'carteirinha-atleta' ? 'flex' : 'block'} !important;
+              visibility: visible !important;
+              opacity: 1 !important;
+            }
           </style>
         </head>
         <body>
           <div style="padding: 20px; background: white;">
-            ${element.outerHTML}
+            ${clonedElement.outerHTML}
           </div>
           <script>
             const images = document.getElementsByTagName('img');
@@ -2240,21 +2329,31 @@ const AppContent = () => {
                             <p className="text-[10px] font-bold text-black/60 uppercase tracking-widest">{aluno.categoria}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => {
-                              setCelebratingAluno(aluno);
-                              setTimeout(() => handleGenerateInstaPost(aluno), 300);
-                            }}
-                            className="p-2 bg-black/10 rounded-xl text-black hover:bg-black/20 transition-all"
-                            title="Gerar Post Instagram"
-                          >
-                            <Instagram size={20} />
-                          </button>
-                          <div className="text-black animate-bounce">
-                            <Trophy size={24} />
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => {
+                                setCelebratingAluno(aluno);
+                                setTimeout(() => handleGenerateInstaPost(aluno), 300);
+                              }}
+                              className="p-2 bg-black/10 rounded-xl text-black hover:bg-black/20 transition-all"
+                              title="Gerar Post Quadrado"
+                            >
+                              <Layers size={20} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setCelebratingAluno(aluno);
+                                setTimeout(() => handleGenerateBirthdayCard(aluno), 300);
+                              }}
+                              className="p-2 bg-black/10 rounded-xl text-black hover:bg-black/20 transition-all"
+                              title="Gerar Post Story (9:16)"
+                            >
+                              <Smartphone size={20} />
+                            </button>
+                            <div className="text-black animate-bounce">
+                              <Trophy size={24} />
+                            </div>
                           </div>
-                        </div>
                       </div>
                     ))}
                     {alunos.filter(aluno => {
@@ -2623,20 +2722,20 @@ const AppContent = () => {
                   </h3>
                   <div className="space-y-8">
                     <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
-                      <h4 className="text-lg font-black text-zinc-100 mb-4">Exportar e Importar Dados</h4>
+                      <h4 className="text-lg font-black text-zinc-100 mb-4">Exportar e Importar Dados (Memória Interna)</h4>
                       <p className="text-zinc-400 mb-6 leading-relaxed">
-                        Você pode exportar todos os dados da nuvem para um arquivo de backup. 
-                        Isso garante que você tenha uma cópia de segurança das suas informações.
+                        Use esta função para salvar uma cópia completa de todos os seus dados diretamente no seu <strong>PC ou Celular</strong>. 
+                        Isso permite que você tenha controle total sobre onde seus dados são armazenados fisicamente.
                       </p>
                       <div className="flex flex-wrap gap-4">
                         <button 
                           onClick={handleExport}
                           className="bg-zinc-800 text-zinc-100 px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-zinc-700 transition-all border border-zinc-700 flex items-center gap-2"
                         >
-                          <Download size={18} /> Exportar Backup
+                          <Download size={18} /> Salvar no Dispositivo
                         </button>
                         <label className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-400/20 cursor-pointer flex items-center gap-2">
-                          <Upload size={18} /> Importar Backup
+                          <Upload size={18} /> Restaurar do Dispositivo
                           <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                         </label>
                       </div>
@@ -3158,14 +3257,18 @@ const AppContent = () => {
                     >
                       <Camera size={16} /> LER QR CODE
                     </button>
-                    <select className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none">
-                      {CATEGORIAS.map(c => <option key={c}>{c}</option>)}
+                    <select 
+                      value={chamadaCategory}
+                      onChange={(e) => setChamadaCategory(e.target.value)}
+                      className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
+                    >
+                      {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <input type="date" className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {alunos.map(aluno => (
+                  {alunos.filter(a => a.categoria === chamadaCategory).map(aluno => (
                     <div key={aluno.id} className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
                       presencas[aluno.id] === 'presente' ? "bg-emerald-500/10 border-emerald-500/30" : "bg-zinc-800/50 border-zinc-800"
@@ -3395,7 +3498,10 @@ const AppContent = () => {
                                 {aluno.numeroCamisa || aluno.nome.charAt(0)}
                               </div>
                               <div>
-                                <p className={cn("font-bold text-sm", isSelected ? "text-yellow-400" : "text-zinc-100")}>{aluno.nome}</p>
+                                <p className={cn("font-bold text-sm", isSelected ? "text-yellow-400" : "text-zinc-100")}>
+                                  {aluno.numeroCamisa && <span className="text-yellow-400 mr-2">#{aluno.numeroCamisa}</span>}
+                                  {aluno.nome}
+                                </p>
                                 <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{aluno.categoria}</p>
                               </div>
                             </div>
@@ -3445,7 +3551,8 @@ const AppContent = () => {
                           <table className="w-full border-collapse">
                             <thead>
                               <tr className="border-b-2 border-black">
-                                <th className="py-2 text-left text-xs font-black uppercase w-12">Nº</th>
+                                <th className="py-2 text-left text-xs font-black uppercase w-10">#</th>
+                                <th className="py-2 text-left text-xs font-black uppercase w-20">Uniforme</th>
                                 <th className="py-2 text-left text-xs font-black uppercase">Nome do Atleta</th>
                                 <th className="py-2 text-left text-xs font-black uppercase w-32">Nascimento</th>
                                 <th className="py-2 text-left text-xs font-black uppercase w-40">RG / CPF</th>
@@ -3454,12 +3561,13 @@ const AppContent = () => {
                             </thead>
                             <tbody>
                               {atletasDaCategoria.map((aluno, index) => (
-                                <tr key={aluno.id} className="border-b border-zinc-200">
-                                  <td className="py-3 text-sm font-bold">{aluno.numeroCamisa || index + 1}</td>
+                                <tr key={aluno.id} className="border-b border-zinc-300">
+                                  <td className="py-3 text-sm font-bold">{index + 1}</td>
+                                  <td className="py-3 text-sm font-black">{aluno.numeroCamisa || '---'}</td>
                                   <td className="py-3 text-sm font-bold uppercase">{aluno.nome}</td>
                                   <td className="py-3 text-sm">{aluno.dataNascimento}</td>
                                   <td className="py-3 text-sm">{aluno.rgCpf || '---'}</td>
-                                  <td className="py-3 border-b border-black/20"></td>
+                                  <td className="py-3 border-b border-black/40"></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -4423,6 +4531,82 @@ const AppContent = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Birthday Card Story Template (Hidden) */}
+        <div 
+          id="birthday-card-template" 
+          className="fixed left-[-9999px] top-[-9999px] w-[1080px] h-[1920px] bg-black flex flex-col items-center justify-between p-16 text-white overflow-hidden"
+          style={{ fontFamily: "'Inter', sans-serif" }}
+        >
+          {/* Background Elements */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-[-5%] left-[-10%] w-[60%] h-[40%] bg-yellow-400/20 rounded-full blur-[180px]" />
+            <div className="absolute bottom-[-5%] right-[-10%] w-[60%] h-[40%] bg-yellow-400/20 rounded-full blur-[180px]" />
+            
+            {/* Decorative Lines */}
+            <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+              <div className="absolute top-0 left-1/4 w-px h-full bg-yellow-400" />
+              <div className="absolute top-0 left-2/4 w-px h-full bg-yellow-400" />
+              <div className="absolute top-0 left-3/4 w-px h-full bg-yellow-400" />
+            </div>
+          </div>
+
+          {/* Header Section */}
+          <div className="relative z-10 flex flex-col items-center gap-8 mt-12">
+            <img src={clubShield} alt="Escudo" className="w-48 h-48 object-contain drop-shadow-[0_0_30px_rgba(250,204,21,0.5)]" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+            <div className="text-center">
+              <h2 className="text-9xl font-black uppercase tracking-tighter leading-none italic">
+                Feliz<br />
+                <span className="text-yellow-400">Aniversário</span>
+              </h2>
+            </div>
+          </div>
+
+          {/* Polaroid Photo Section */}
+          <div className="relative z-10 mt-10">
+            {/* Tape Effect */}
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-40 h-12 bg-zinc-700/50 backdrop-blur-sm rotate-2 z-20" />
+            
+            <div className="bg-white p-8 pb-24 shadow-[0_30px_60px_rgba(0,0,0,0.8)] rotate-[-2deg]">
+              <div className="w-[650px] h-[750px] bg-zinc-200 overflow-hidden">
+                {celebratingAluno?.foto ? (
+                  <img src={celebratingAluno.foto} alt={celebratingAluno.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                ) : (
+                  <div className="w-full h-full bg-zinc-300 flex items-center justify-center">
+                    <UserCircle size={300} className="text-zinc-400" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Floating Decorations */}
+            <div className="absolute -top-10 -left-10 text-yellow-400 animate-bounce">
+              <Trophy size={80} />
+            </div>
+            <div className="absolute -bottom-10 -right-10 text-yellow-400">
+              <Cake size={100} />
+            </div>
+          </div>
+
+          {/* Message Section */}
+          <div className="relative z-10 text-center mb-20 w-full px-10">
+            <h3 className="text-7xl font-black uppercase text-white mb-6 tracking-tight">
+              {celebratingAluno?.nome}
+            </h3>
+            <div className="h-1 w-40 bg-yellow-400 mx-auto mb-8" />
+            <p className="text-3xl font-medium text-zinc-400 leading-relaxed max-w-2xl mx-auto italic">
+              "Que a alegria, paz, saúde e felicidade sejam renovadas em sua vida hoje e se renovem sempre. Parabéns por mais um ano de vida e por fazer parte da nossa família!"
+            </p>
+            
+            <div className="mt-16 flex flex-col items-center gap-4">
+              <p className="text-2xl font-black uppercase tracking-[0.5em] text-yellow-400">Pirua Esporte Clube</p>
+              <div className="flex items-center gap-3 text-zinc-500">
+                <Instagram size={24} />
+                <span className="text-xl font-bold">@pirua_esporte_clube</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Instagram Post Template (Hidden) */}
         <div 
