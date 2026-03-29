@@ -52,7 +52,9 @@ import {
   Upload,
   Cloud,
   Smartphone,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -342,6 +344,7 @@ const BottomNavItem = ({ icon: Icon, label, active, onClick, badge }: { icon: an
 const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     nome: '',
     idade: '',
@@ -371,6 +374,27 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
     alergias: ''
   });
 
+  const validateStep = (s: number) => {
+    const newErrors: Record<string, string> = {};
+    if (s === 1) {
+      if (!formData.nome) newErrors.nome = 'Nome é obrigatório';
+      if (!formData.dataNascimento) newErrors.dataNascimento = 'Data de nascimento é obrigatória';
+      if (!formData.rgCpf) newErrors.rgCpf = 'RG/CPF é obrigatório';
+      if (!formData.categoria) newErrors.categoria = 'Categoria é obrigatória';
+      if (!formData.foto) newErrors.foto = 'Foto é obrigatória';
+    } else if (s === 2) {
+      if (!formData.endereco) newErrors.endereco = 'Endereço é obrigatório';
+      if (!formData.bairro) newErrors.bairro = 'Bairro é obrigatório';
+      if (!formData.cidade) newErrors.cidade = 'Cidade é obrigatória';
+      if (!formData.uf) newErrors.uf = 'UF é obrigatória';
+      if (!formData.responsavel) newErrors.responsavel = 'Nome do responsável é obrigatório';
+      if (!formData.responsavelRgCpf) newErrors.responsavelRgCpf = 'RG/CPF do responsável é obrigatório';
+      if (!formData.telefoneResponsavel) newErrors.telefoneResponsavel = 'Telefone do responsável é obrigatório';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -383,8 +407,9 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.nome || !formData.telefone || !formData.responsavel) {
-      alert('Por favor, preencha pelo menos o nome, telefone e o responsável.');
+    if (!validateStep(3)) {
+      if (!formData.horarioDormir) setErrors(prev => ({ ...prev, horarioDormir: 'Obrigatório' }));
+      if (!formData.tempoCelular) setErrors(prev => ({ ...prev, tempoCelular: 'Obrigatório' }));
       return;
     }
     setLoading(true);
@@ -448,8 +473,8 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">Foto 3x4</label>
                   <div className="relative group">
                     <div className={cn(
-                      "w-32 h-40 bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
-                      formData.foto && "border-solid border-yellow-400"
+                      "w-32 h-40 bg-zinc-800 border-2 border-dashed rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
+                      formData.foto ? "border-solid border-yellow-400" : (errors.foto ? "border-yellow-400" : "border-zinc-700")
                     )}>
                       {formData.foto ? (
                         <img src={formData.foto} alt="Preview" className="w-full h-full object-cover" />
@@ -462,54 +487,86 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                       <input 
                         type="file" 
                         accept="image/*" 
-                        onChange={handlePhotoChange}
+                        onChange={(e) => {
+                          handlePhotoChange(e);
+                          if (errors.foto) setErrors(prev => { const n = {...prev}; delete n.foto; return n; });
+                        }}
                         className="absolute inset-0 opacity-0 cursor-pointer"
                       />
                     </div>
+                    {errors.foto && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider mt-1">{errors.foto}</p>}
                   </div>
                 </div>
 
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2 space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label>
-                    <input 
-                      type="text" 
-                      value={formData.nome}
-                      onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                      placeholder="Nome do Aluno"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Data de Nascimento</label>
-                    <input 
-                      type="date" 
-                      value={formData.dataNascimento}
-                      onChange={(e) => setFormData({...formData, dataNascimento: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">RG / CPF</label>
-                    <input 
-                      type="text" 
-                      value={formData.rgCpf}
-                      onChange={(e) => setFormData({...formData, rgCpf: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                      placeholder="000.000.000-00"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
-                    <select 
-                      value={formData.categoria}
-                      onChange={(e) => setFormData({...formData, categoria: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
-                    >
-                      <option value="">Selecione...</option>
-                      {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome Completo</label>
+                      <input 
+                        type="text" 
+                        value={formData.nome}
+                        onChange={(e) => {
+                          setFormData({...formData, nome: e.target.value});
+                          if (errors.nome) setErrors(prev => { const n = {...prev}; delete n.nome; return n; });
+                        }}
+                        className={cn(
+                          "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                          errors.nome ? "border-yellow-400" : "border-zinc-700"
+                        )}
+                        placeholder="Nome do Aluno"
+                      />
+                      {errors.nome && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.nome}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Data de Nascimento</label>
+                      <input 
+                        type="date" 
+                        value={formData.dataNascimento}
+                        onChange={(e) => {
+                          setFormData({...formData, dataNascimento: e.target.value});
+                          if (errors.dataNascimento) setErrors(prev => { const n = {...prev}; delete n.dataNascimento; return n; });
+                        }}
+                        className={cn(
+                          "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                          errors.dataNascimento ? "border-yellow-400" : "border-zinc-700"
+                        )}
+                      />
+                      {errors.dataNascimento && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.dataNascimento}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">RG / CPF</label>
+                      <input 
+                        type="text" 
+                        value={formData.rgCpf}
+                        onChange={(e) => {
+                          setFormData({...formData, rgCpf: e.target.value});
+                          if (errors.rgCpf) setErrors(prev => { const n = {...prev}; delete n.rgCpf; return n; });
+                        }}
+                        className={cn(
+                          "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                          errors.rgCpf ? "border-yellow-400" : "border-zinc-700"
+                        )}
+                        placeholder="000.000.000-00"
+                      />
+                      {errors.rgCpf && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.rgCpf}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoria</label>
+                      <select 
+                        value={formData.categoria}
+                        onChange={(e) => {
+                          setFormData({...formData, categoria: e.target.value});
+                          if (errors.categoria) setErrors(prev => { const n = {...prev}; delete n.categoria; return n; });
+                        }}
+                        className={cn(
+                          "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                          errors.categoria ? "border-yellow-400" : "border-zinc-700"
+                        )}
+                      >
+                        <option value="">Selecione...</option>
+                        {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {errors.categoria && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.categoria}</p>}
+                    </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Posição</label>
                     <input 
@@ -534,7 +591,9 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
               </div>
 
               <button 
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  if (validateStep(1)) setStep(2);
+                }}
                 className="w-full bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all mt-8"
               >
                 Próximo Passo: Endereço e Responsável
@@ -552,41 +611,69 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                     <input 
                       type="text" 
                       value={formData.endereco}
-                      onChange={(e) => setFormData({...formData, endereco: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, endereco: e.target.value});
+                        if (errors.endereco) setErrors(prev => { const n = {...prev}; delete n.endereco; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.endereco ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="Rua, número, complemento"
                     />
+                    {errors.endereco && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.endereco}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Bairro</label>
                     <input 
                       type="text" 
                       value={formData.bairro}
-                      onChange={(e) => setFormData({...formData, bairro: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, bairro: e.target.value});
+                        if (errors.bairro) setErrors(prev => { const n = {...prev}; delete n.bairro; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.bairro ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="Bairro"
                     />
+                    {errors.bairro && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.bairro}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Cidade</label>
                     <input 
                       type="text" 
                       value={formData.cidade}
-                      onChange={(e) => setFormData({...formData, cidade: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, cidade: e.target.value});
+                        if (errors.cidade) setErrors(prev => { const n = {...prev}; delete n.cidade; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.cidade ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="Cidade"
                     />
+                    {errors.cidade && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.cidade}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">UF</label>
                     <input 
                       type="text" 
                       value={formData.uf}
-                      onChange={(e) => setFormData({...formData, uf: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, uf: e.target.value});
+                        if (errors.uf) setErrors(prev => { const n = {...prev}; delete n.uf; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.uf ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="Estado"
                       maxLength={2}
                     />
+                    {errors.uf && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.uf}</p>}
                   </div>
                 </div>
               </div>
@@ -601,30 +688,51 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                     <input 
                       type="text" 
                       value={formData.responsavel}
-                      onChange={(e) => setFormData({...formData, responsavel: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, responsavel: e.target.value});
+                        if (errors.responsavel) setErrors(prev => { const n = {...prev}; delete n.responsavel; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.responsavel ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="Nome do Pai ou Mãe"
                     />
+                    {errors.responsavel && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.responsavel}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">RG / CPF do Responsável</label>
                     <input 
                       type="text" 
                       value={formData.responsavelRgCpf}
-                      onChange={(e) => setFormData({...formData, responsavelRgCpf: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, responsavelRgCpf: e.target.value});
+                        if (errors.responsavelRgCpf) setErrors(prev => { const n = {...prev}; delete n.responsavelRgCpf; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.responsavelRgCpf ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="000.000.000-00"
                     />
+                    {errors.responsavelRgCpf && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.responsavelRgCpf}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Telefone do Responsável</label>
                     <input 
                       type="text" 
                       value={formData.telefoneResponsavel}
-                      onChange={(e) => setFormData({...formData, telefoneResponsavel: e.target.value})}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                      onChange={(e) => {
+                        setFormData({...formData, telefoneResponsavel: e.target.value});
+                        if (errors.telefoneResponsavel) setErrors(prev => { const n = {...prev}; delete n.telefoneResponsavel; return n; });
+                      }}
+                      className={cn(
+                        "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                        errors.telefoneResponsavel ? "border-yellow-400" : "border-zinc-700"
+                      )}
                       placeholder="(00) 00000-0000"
                     />
+                    {errors.telefoneResponsavel && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.telefoneResponsavel}</p>}
                   </div>
                 </div>
               </div>
@@ -637,7 +745,9 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                   Voltar
                 </button>
                 <button 
-                  onClick={() => setStep(3)}
+                  onClick={() => {
+                    if (validateStep(2)) setStep(3);
+                  }}
                   className="flex-[2] bg-yellow-400 text-black font-black py-4 rounded-2xl hover:bg-yellow-500 transition-all"
                 >
                   Próximo Passo: Anamnese
@@ -655,18 +765,32 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
                   <input 
                     type="text" 
                     value={formData.horarioDormir}
-                    onChange={(e) => setFormData({...formData, horarioDormir: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    onChange={(e) => {
+                      setFormData({...formData, horarioDormir: e.target.value});
+                      if (errors.horarioDormir) setErrors(prev => { const n = {...prev}; delete n.horarioDormir; return n; });
+                    }}
+                    className={cn(
+                      "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                      errors.horarioDormir ? "border-yellow-400" : "border-zinc-700"
+                    )}
                   />
+                  {errors.horarioDormir && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.horarioDormir}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Tempo de uso de celular/games</label>
                   <input 
                     type="text" 
                     value={formData.tempoCelular}
-                    onChange={(e) => setFormData({...formData, tempoCelular: e.target.value})}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none"
+                    onChange={(e) => {
+                      setFormData({...formData, tempoCelular: e.target.value});
+                      if (errors.tempoCelular) setErrors(prev => { const n = {...prev}; delete n.tempoCelular; return n; });
+                    }}
+                    className={cn(
+                      "w-full bg-zinc-800 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                      errors.tempoCelular ? "border-yellow-400" : "border-zinc-700"
+                    )}
                   />
+                  {errors.tempoCelular && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{errors.tempoCelular}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Alergias</label>
@@ -770,6 +894,7 @@ const AppContent = () => {
     }
     return 'dashboard';
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -777,6 +902,8 @@ const AppContent = () => {
   const [loggedInAluno, setLoggedInAluno] = useState<Aluno | null>(null);
   const [clubShield, setClubShield] = useState(ESCUDO_URL);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('Todos');
   const [isMobile, setIsMobile] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [anamneseData, setAnamneseData] = useState<any>({});
@@ -784,6 +911,8 @@ const AppContent = () => {
   const [supabaseEnabled, setSupabaseEnabled] = useState(false);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [isSyncingToSupabase, setIsSyncingToSupabase] = useState(false);
+  const [expandedEventoId, setExpandedEventoId] = useState<string | null>(null);
+  const [expandedAnamneseSection, setExpandedAnamneseSection] = useState<string | null>('habitos');
 
   // --- Supabase Connection Check ---
   useEffect(() => {
@@ -1354,11 +1483,23 @@ const AppContent = () => {
     }
   };
 
-  const handleSaveAnamnese = async (anamneseData: any) => {
+  const handleSaveAnamnese = async (data?: any) => {
+    const dataToSave = data && data.target ? anamneseData : (data || anamneseData);
     if (!selectedAnamneseAluno) return;
+
+    const errors: Record<string, string> = {};
+    if (!dataToSave.horarioDormir) errors.horarioDormir = 'Obrigatório';
+    if (!dataToSave.tempoCelular) errors.tempoCelular = 'Obrigatório';
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
+
     try {
       const newAnamnese = {
-        ...anamneseData,
+        ...dataToSave,
         alunoId: selectedAnamneseAluno.id,
         updatedAt: new Date().toISOString()
       };
@@ -1938,8 +2079,17 @@ const AppContent = () => {
   };
 
   const filteredAlunos = useMemo(() => {
-    return alunos.filter(a => a.nome.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [searchQuery, alunos]);
+    const query = searchQuery.toLowerCase();
+    return alunos.filter(a => {
+      const matchesSearch = a.nome.toLowerCase().includes(query) || 
+        (a.responsavel && a.responsavel.toLowerCase().includes(query));
+      
+      const matchesCategory = selectedCategoryFilter === 'Todas' || a.categoria === selectedCategoryFilter;
+      const matchesStatus = selectedStatusFilter === 'Todos' || (a.status || 'ativo') === selectedStatusFilter;
+      
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [searchQuery, selectedCategoryFilter, selectedStatusFilter, alunos]);
 
   console.log("App rendering. AuthLoading:", authLoading, "User:", user ? "Yes" : "No");
 
@@ -2331,7 +2481,7 @@ const AppContent = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
                 <input 
                   type="text" 
-                  placeholder="Buscar..." 
+                  placeholder="Buscar atleta ou responsável..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 w-full md:w-64 transition-all text-sm"
@@ -3185,6 +3335,22 @@ const AppContent = () => {
                     telefoneResponsavel: formData.get('telefoneResponsavel'),
                     foto: photoPreview || loggedInAluno?.foto
                   };
+
+                  const errors: Record<string, string> = {};
+                  if (!alunoData.nome) errors.nome = 'Obrigatório';
+                  if (!alunoData.dataNascimento) errors.dataNascimento = 'Obrigatório';
+                  if (!alunoData.rgCpf) errors.rgCpf = 'Obrigatório';
+                  if (!alunoData.responsavel) errors.responsavel = 'Obrigatório';
+                  if (!alunoData.responsavelRgCpf) errors.responsavelRgCpf = 'Obrigatório';
+                  if (!alunoData.telefoneResponsavel) errors.telefoneResponsavel = 'Obrigatório';
+                  if (!alunoData.foto) errors.foto = 'Obrigatório';
+
+                  if (Object.keys(errors).length > 0) {
+                    setFormErrors(errors);
+                    return;
+                  }
+                  setFormErrors({});
+
                   await handleSaveAluno(alunoData);
                 }}>
                   {/* Dados do Aluno */}
@@ -3197,8 +3363,8 @@ const AppContent = () => {
                         <label className="text-xs font-bold text-zinc-500 uppercase block">Foto 3x4</label>
                         <div className="relative group">
                           <div className={cn(
-                            "w-32 h-40 bg-zinc-800 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
-                            (photoPreview || (currentView === 'meu_perfil' && loggedInAluno?.foto)) && "border-solid border-yellow-400"
+                            "w-32 h-40 bg-zinc-800 border-2 border-dashed rounded-xl flex flex-col items-center justify-center overflow-hidden transition-all group-hover:border-yellow-400/50",
+                            (photoPreview || (currentView === 'meu_perfil' && loggedInAluno?.foto)) ? "border-solid border-yellow-400" : (formErrors.foto ? "border-yellow-400" : "border-zinc-700")
                           )}>
                             {(photoPreview || (currentView === 'meu_perfil' && loggedInAluno?.foto)) ? (
                               <img src={photoPreview || loggedInAluno?.foto} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -3211,10 +3377,14 @@ const AppContent = () => {
                             <input 
                               type="file" 
                               accept="image/*" 
-                              onChange={handlePhotoChange}
+                              onChange={(e) => {
+                                handlePhotoChange(e);
+                                if (formErrors.foto) setFormErrors(prev => { const n = {...prev}; delete n.foto; return n; });
+                              }}
                               className="absolute inset-0 opacity-0 cursor-pointer"
                             />
                           </div>
+                          {formErrors.foto && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider mt-1">{formErrors.foto}</p>}
                         </div>
                       </div>
 
@@ -3225,9 +3395,14 @@ const AppContent = () => {
                             name="nome"
                             type="text" 
                             defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.nome : ''}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                            onChange={() => { if (formErrors.nome) setFormErrors(prev => { const n = {...prev}; delete n.nome; return n; }); }}
+                            className={cn(
+                              "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                              formErrors.nome ? "border-yellow-400" : "border-zinc-700"
+                            )}
                             placeholder="Nome completo" 
                           />
+                          {formErrors.nome && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.nome}</p>}
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Data de Nascimento</label>
@@ -3239,9 +3414,16 @@ const AppContent = () => {
                                 ? loggedInAluno?.dataNascimento?.split('/').reverse().join('-') 
                                 : (selectedAluno?.dataNascimento?.split('/').reverse().join('-') || '')
                             }
-                            onChange={handleBirthDateChange}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                            onChange={(e) => {
+                              handleBirthDateChange(e);
+                              if (formErrors.dataNascimento) setFormErrors(prev => { const n = {...prev}; delete n.dataNascimento; return n; });
+                            }}
+                            className={cn(
+                              "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                              formErrors.dataNascimento ? "border-yellow-400" : "border-zinc-700"
+                            )}
                           />
+                          {formErrors.dataNascimento && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.dataNascimento}</p>}
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF</label>
@@ -3249,9 +3431,14 @@ const AppContent = () => {
                             name="rgCpf"
                             type="text" 
                             defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.rgCpf : ''}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                            onChange={() => { if (formErrors.rgCpf) setFormErrors(prev => { const n = {...prev}; delete n.rgCpf; return n; }); }}
+                            className={cn(
+                              "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                              formErrors.rgCpf ? "border-yellow-400" : "border-zinc-700"
+                            )}
                             placeholder="000.000.000-00" 
                           />
+                          {formErrors.rgCpf && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.rgCpf}</p>}
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase">Telefone</label>
@@ -3346,9 +3533,14 @@ const AppContent = () => {
                           name="responsavel"
                           type="text" 
                           defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.responsavel : ''}
-                          className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                          onChange={() => { if (formErrors.responsavel) setFormErrors(prev => { const n = {...prev}; delete n.responsavel; return n; }); }}
+                          className={cn(
+                            "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                            formErrors.responsavel ? "border-yellow-400" : "border-zinc-700"
+                          )}
                           placeholder="Nome completo" 
                         />
+                        {formErrors.responsavel && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.responsavel}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">RG / CPF do Responsável</label>
@@ -3356,9 +3548,14 @@ const AppContent = () => {
                           name="responsavelRgCpf"
                           type="text" 
                           defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.responsavelRgCpf : ''}
-                          className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                          onChange={() => { if (formErrors.responsavelRgCpf) setFormErrors(prev => { const n = {...prev}; delete n.responsavelRgCpf; return n; }); }}
+                          className={cn(
+                            "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                            formErrors.responsavelRgCpf ? "border-yellow-400" : "border-zinc-700"
+                          )}
                           placeholder="000.000.000-00" 
                         />
+                        {formErrors.responsavelRgCpf && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.responsavelRgCpf}</p>}
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase">Telefone do Responsável</label>
@@ -3366,9 +3563,14 @@ const AppContent = () => {
                           name="telefoneResponsavel"
                           type="text" 
                           defaultValue={currentView === 'meu_perfil' ? loggedInAluno?.telefone : ''}
-                          className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none" 
+                          onChange={() => { if (formErrors.telefoneResponsavel) setFormErrors(prev => { const n = {...prev}; delete n.telefoneResponsavel; return n; }); }}
+                          className={cn(
+                            "w-full bg-zinc-800 border rounded-xl px-4 py-3 text-xs md:text-sm focus:ring-2 focus:ring-yellow-400 outline-none transition-all",
+                            formErrors.telefoneResponsavel ? "border-yellow-400" : "border-zinc-700"
+                          )}
                           placeholder="(00) 00000-0000" 
                         />
+                        {formErrors.telefoneResponsavel && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.telefoneResponsavel}</p>}
                       </div>
                     </div>
                   </div>
@@ -3576,14 +3778,59 @@ const AppContent = () => {
 
             {currentView === 'lista_alunos' && userRole === 'admin' && (
               <div className="bg-zinc-900 rounded-3xl border border-zinc-800 shadow-xl overflow-hidden">
-                <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-                  <h3 className="text-lg font-bold">Listagem Geral</h3>
+                <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full md:w-auto">
+                    <div>
+                      <h3 className="text-lg font-bold whitespace-nowrap">Listagem Geral</h3>
+                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{filteredAlunos.length} {filteredAlunos.length === 1 ? 'Atleta encontrado' : 'Atletas encontrados'}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Categoria</span>
+                        <select 
+                          value={selectedCategoryFilter}
+                          onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-yellow-400 transition-all min-w-[120px]"
+                        >
+                          <option value="Todas">Todas as Categorias</option>
+                          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Status</span>
+                        <select 
+                          value={selectedStatusFilter}
+                          onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-yellow-400 transition-all min-w-[120px]"
+                        >
+                          <option value="Todos">Todos os Status</option>
+                          <option value="ativo">Ativo</option>
+                          <option value="inativo">Inativo</option>
+                        </select>
+                      </div>
+                      {(selectedCategoryFilter !== 'Todas' || selectedStatusFilter !== 'Todos' || searchQuery !== '') && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-black text-transparent uppercase tracking-widest ml-1">.</span>
+                          <button 
+                            onClick={() => {
+                              setSelectedCategoryFilter('Todas');
+                              setSelectedStatusFilter('Todos');
+                              setSearchQuery('');
+                            }}
+                            className="text-[10px] font-black text-zinc-500 hover:text-yellow-400 uppercase tracking-widest px-2 py-1.5 transition-colors"
+                          >
+                            Limpar Filtros
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <button 
                     onClick={() => {
                       setSelectedAluno(null);
                       setCurrentView('cadastrar_aluno');
                     }}
-                    className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 rounded-xl text-xs font-black hover:bg-yellow-500 transition-colors uppercase"
+                    className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 rounded-xl text-xs font-black hover:bg-yellow-500 transition-colors uppercase w-full md:w-auto justify-center"
                   >
                     <Plus size={16} /> Adicionar
                   </button>
@@ -3763,39 +4010,101 @@ const AppContent = () => {
                       {eventos.map(evento => {
                         const currentLineupId = evento.id;
                         const isConfirmed = (eventLineups[currentLineupId] || []).includes(loggedInAluno?.id || '');
+                        const isExpanded = expandedEventoId === evento.id;
                         
                         return (
-                          <div key={evento.id} className="bg-zinc-800/50 p-6 rounded-2xl border border-zinc-800 flex items-center justify-between">
-                            <div>
-                              <h4 className="font-bold text-zinc-100">{evento.nome}</h4>
-                              <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500 font-bold uppercase tracking-widest">
-                                <span className="flex items-center gap-1"><CalendarDays size={14} /> {evento.dataInicio}</span>
-                                <span className="flex items-center gap-1"><MapPin size={14} /> {evento.endereco}</span>
+                          <div key={evento.id} className="bg-zinc-800/50 rounded-2xl border border-zinc-800 overflow-hidden transition-all">
+                            <div 
+                              className="p-6 flex items-center justify-between cursor-pointer hover:bg-zinc-800/80 transition-colors"
+                              onClick={() => setExpandedEventoId(isExpanded ? null : evento.id)}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="bg-yellow-400/10 p-2 rounded-lg text-yellow-400">
+                                  <Trophy size={18} />
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-zinc-100">{evento.nome}</h4>
+                                  <div className="flex items-center gap-4 mt-1 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                                    <span className="flex items-center gap-1"><CalendarDays size={12} /> {new Date(evento.dataInicio).toLocaleDateString('pt-BR')}</span>
+                                    <span className="flex items-center gap-1"><MapPin size={12} /> {evento.cidade}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-4">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!loggedInAluno) return;
+                                    setEventLineups(prev => {
+                                      const currentLineup = prev[currentLineupId] || [];
+                                      const isAlreadyConfirmed = currentLineup.includes(loggedInAluno.id);
+                                      const newLineup = isAlreadyConfirmed 
+                                        ? currentLineup.filter(id => id !== loggedInAluno.id) 
+                                        : [...currentLineup, loggedInAluno.id];
+                                      handleSaveEscalacao(currentLineupId, newLineup);
+                                      return { ...prev, [currentLineupId]: newLineup };
+                                    });
+                                  }}
+                                  className={cn(
+                                    "px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all border",
+                                    isConfirmed 
+                                      ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20" 
+                                      : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-yellow-400 hover:text-yellow-400"
+                                  )}
+                                >
+                                  {isConfirmed ? 'CONFIRMADO' : 'CONFIRMAR'}
+                                </button>
+                                <motion.div
+                                  animate={{ rotate: isExpanded ? 180 : 0 }}
+                                  className="text-zinc-500"
+                                >
+                                  <ChevronDown size={20} />
+                                </motion.div>
                               </div>
                             </div>
-                            
-                            <button 
-                              onClick={() => {
-                                if (!loggedInAluno) return;
-                                setEventLineups(prev => {
-                                  const currentLineup = prev[currentLineupId] || [];
-                                  const isAlreadyConfirmed = currentLineup.includes(loggedInAluno.id);
-                                  const newLineup = isAlreadyConfirmed 
-                                    ? currentLineup.filter(id => id !== loggedInAluno.id) 
-                                    : [...currentLineup, loggedInAluno.id];
-                                  handleSaveEscalacao(currentLineupId, newLineup);
-                                  return { ...prev, [currentLineupId]: newLineup };
-                                });
-                              }}
-                              className={cn(
-                                "px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all border",
-                                isConfirmed 
-                                  ? "bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20" 
-                                  : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-yellow-400 hover:text-yellow-400"
+
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="border-t border-zinc-800 bg-black/20"
+                                >
+                                  <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Localização Completa</p>
+                                        <p className="text-sm text-zinc-300 flex items-start gap-2">
+                                          <MapPin size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+                                          {evento.endereco}<br />
+                                          {evento.cidade} - {evento.uf}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Início</p>
+                                          <p className="text-sm text-zinc-300 flex items-center gap-2">
+                                            <CalendarDays size={16} className="text-yellow-400" />
+                                            {new Date(evento.dataInicio).toLocaleDateString('pt-BR')} às {evento.horario}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Término</p>
+                                          <p className="text-sm text-zinc-300 flex items-center gap-2">
+                                            <CalendarDays size={16} className="text-yellow-400" />
+                                            {new Date(evento.dataFim).toLocaleDateString('pt-BR')}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
                               )}
-                            >
-                              {isConfirmed ? 'PRESENÇA CONFIRMADA' : 'CONFIRMAR PRESENÇA'}
-                            </button>
+                            </AnimatePresence>
                           </div>
                         );
                       })}
@@ -4057,7 +4366,11 @@ const AppContent = () => {
                                 tratamentoMedico: '',
                                 medicacaoControlada: '',
                                 outroExercicio: '',
-                                alergias: ''
+                                alergias: '',
+                                condicoes: {},
+                                condicoesDetalhes: {},
+                                patologias: {},
+                                observacoes: ''
                               });
                             }
                             setCurrentView('anamnese');
@@ -4106,9 +4419,9 @@ const AppContent = () => {
                         <h3 className="text-sm font-bold uppercase underline">Ficha de Anamnese e Histórico Médico</h3>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div className="flex flex-col gap-6">
                         {/* Dados Pessoais (Baseados na Ficha Cadastral) */}
-                        <div className="md:col-span-3 bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800 print:bg-zinc-50 print:border-zinc-200">
+                        <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800 print:bg-zinc-50 print:border-zinc-200">
                           <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest mb-4 flex items-center gap-2 print:text-black">
                             <UserCircle size={16} /> Dados do Atleta
                           </h4>
@@ -4144,172 +4457,305 @@ const AppContent = () => {
                           </div>
                         </div>
 
-                        {/* Hábitos e Rotina */}
-                        <div className="space-y-6">
-                          <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2 print:text-black">
-                            <ClipboardList size={16} /> Hábitos e Rotina
-                          </h4>
-                          <div className="space-y-4">
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Horário que dorme</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Ex: 22:00" 
-                                value={anamneseData.horarioDormir || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, horarioDormir: e.target.value })}
-                              />
+                        {/* Seções Expansíveis */}
+                        <div className="space-y-4">
+                          {/* Hábitos e Rotina */}
+                          <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-800/10">
+                            <button 
+                              onClick={() => setExpandedAnamneseSection(expandedAnamneseSection === 'habitos' ? null : 'habitos')}
+                              className="w-full p-4 flex items-center justify-between bg-zinc-800/30 hover:bg-zinc-800/50 transition-all print:hidden"
+                            >
+                              <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <ClipboardList size={16} /> Hábitos e Rotina
+                              </h4>
+                              <ChevronDown className={cn("text-zinc-500 transition-transform", expandedAnamneseSection === 'habitos' && "rotate-180")} size={18} />
+                            </button>
+                            <div className="hidden print:block p-4 border-b border-zinc-200">
+                              <h4 className="text-black font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <ClipboardList size={16} /> Hábitos e Rotina
+                              </h4>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 accent-yellow-400" 
-                                id="acordar-cedo" 
-                                checked={anamneseData.dificuldadeAcordar || false}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, dificuldadeAcordar: e.target.checked })}
-                              />
-                              <label htmlFor="acordar-cedo" className="text-sm text-zinc-300 print:text-black">Dificuldade em acordar cedo?</label>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Tempo de Celular/Jogos (dia)</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Ex: 2 horas" 
-                                value={anamneseData.tempoCelular || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, tempoCelular: e.target.value })}
-                              />
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 accent-yellow-400" 
-                                id="alimenta-bem" 
-                                checked={anamneseData.alimentaBem || false}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, alimentaBem: e.target.checked })}
-                              />
-                              <label htmlFor="alimenta-bem" className="text-sm text-zinc-300 print:text-black">Se alimenta bem (come de tudo)?</label>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Frequência ao Médico</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Ex: Semestral" 
-                                value={anamneseData.frequenciaMedico || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, frequenciaMedico: e.target.value })}
-                              />
-                            </div>
+                            <AnimatePresence initial={false}>
+                              {(expandedAnamneseSection === 'habitos' || true) && (
+                                <motion.div
+                                  initial={expandedAnamneseSection === 'habitos' ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+                                  animate={{ 
+                                    height: expandedAnamneseSection === 'habitos' ? 'auto' : 0, 
+                                    opacity: expandedAnamneseSection === 'habitos' ? 1 : 0 
+                                  }}
+                                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                                  className="overflow-hidden print:!h-auto print:!opacity-100"
+                                >
+                                  <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] text-zinc-500 uppercase font-bold">Horário que dorme</label>
+                                        <input 
+                                          type="text" 
+                                          className={cn(
+                                            "w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white transition-all",
+                                            formErrors.horarioDormir ? "border-yellow-400" : "border-zinc-700"
+                                          )}
+                                          placeholder="Ex: 22:00" 
+                                          value={anamneseData.horarioDormir || ''}
+                                          onChange={(e) => {
+                                            setAnamneseData({ ...anamneseData, horarioDormir: e.target.value });
+                                            if (formErrors.horarioDormir) setFormErrors(prev => { const n = {...prev}; delete n.horarioDormir; return n; });
+                                          }}
+                                        />
+                                        {formErrors.horarioDormir && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.horarioDormir}</p>}
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <input 
+                                          type="checkbox" 
+                                          className="w-4 h-4 accent-yellow-400" 
+                                          id="acordar-cedo" 
+                                          checked={anamneseData.dificuldadeAcordar || false}
+                                          onChange={(e) => setAnamneseData({ ...anamneseData, dificuldadeAcordar: e.target.checked })}
+                                        />
+                                        <label htmlFor="acordar-cedo" className="text-sm text-zinc-300 print:text-black">Dificuldade em acordar cedo?</label>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] text-zinc-500 uppercase font-bold">Frequência ao Médico</label>
+                                        <input 
+                                          type="text" 
+                                          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                          placeholder="Ex: Semestral" 
+                                          value={anamneseData.frequenciaMedico || ''}
+                                          onChange={(e) => setAnamneseData({ ...anamneseData, frequenciaMedico: e.target.value })}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] text-zinc-500 uppercase font-bold">Tempo de Celular/Jogos (dia)</label>
+                                        <input 
+                                          type="text" 
+                                          className={cn(
+                                            "w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white transition-all",
+                                            formErrors.tempoCelular ? "border-yellow-400" : "border-zinc-700"
+                                          )}
+                                          placeholder="Ex: 2 horas" 
+                                          value={anamneseData.tempoCelular || ''}
+                                          onChange={(e) => {
+                                            setAnamneseData({ ...anamneseData, tempoCelular: e.target.value });
+                                            if (formErrors.tempoCelular) setFormErrors(prev => { const n = {...prev}; delete n.tempoCelular; return n; });
+                                          }}
+                                        />
+                                        {formErrors.tempoCelular && <p className="text-[10px] text-yellow-400 font-bold uppercase tracking-wider">{formErrors.tempoCelular}</p>}
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <input 
+                                          type="checkbox" 
+                                          className="w-4 h-4 accent-yellow-400" 
+                                          id="alimenta-bem" 
+                                          checked={anamneseData.alimentaBem || false}
+                                          onChange={(e) => setAnamneseData({ ...anamneseData, alimentaBem: e.target.checked })}
+                                        />
+                                        <label htmlFor="alimenta-bem" className="text-sm text-zinc-300 print:text-black">Se alimenta bem (come de tudo)?</label>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        </div>
 
-                        {/* Histórico Médico */}
-                        <div className="space-y-6">
-                          <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2 print:text-black">
-                            <ShieldAlert size={16} /> Histórico Médico
-                          </h4>
-                          <div className="space-y-4">
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Já fraturou algum membro?</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Qual?" 
-                                value={anamneseData.fraturas || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, fraturas: e.target.value })}
-                              />
+                          {/* Histórico Médico */}
+                          <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-800/10">
+                            <button 
+                              onClick={() => setExpandedAnamneseSection(expandedAnamneseSection === 'medico' ? null : 'medico')}
+                              className="w-full p-4 flex items-center justify-between bg-zinc-800/30 hover:bg-zinc-800/50 transition-all print:hidden"
+                            >
+                              <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <ShieldAlert size={16} /> Histórico Médico e Condições
+                              </h4>
+                              <ChevronDown className={cn("text-zinc-500 transition-transform", expandedAnamneseSection === 'medico' && "rotate-180")} size={18} />
+                            </button>
+                            <div className="hidden print:block p-4 border-b border-zinc-200">
+                              <h4 className="text-black font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <ShieldAlert size={16} /> Histórico Médico e Condições
+                              </h4>
                             </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Tratamento médico atual?</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Qual?" 
-                                value={anamneseData.tratamentoMedico || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, tratamentoMedico: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Medicação controlada?</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Qual?" 
-                                value={anamneseData.medicacaoControlada || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, medicacaoControlada: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Outro exercício físico?</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Qual?" 
-                                value={anamneseData.outroExercicio || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, outroExercicio: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Alergias?</label>
-                              <input 
-                                type="text" 
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
-                                placeholder="Qual?" 
-                                value={anamneseData.alergias || ''}
-                                onChange={(e) => setAnamneseData({ ...anamneseData, alergias: e.target.value })}
-                              />
-                            </div>
+                            <AnimatePresence initial={false}>
+                              {(expandedAnamneseSection === 'medico' || true) && (
+                                <motion.div
+                                  initial={expandedAnamneseSection === 'medico' ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+                                  animate={{ 
+                                    height: expandedAnamneseSection === 'medico' ? 'auto' : 0, 
+                                    opacity: expandedAnamneseSection === 'medico' ? 1 : 0 
+                                  }}
+                                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                                  className="overflow-hidden print:!h-auto print:!opacity-100"
+                                >
+                                  <div className="p-6 space-y-8">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      <div className="space-y-4">
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-zinc-500 uppercase font-bold">Já fraturou algum membro?</label>
+                                          <input 
+                                            type="text" 
+                                            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                            placeholder="Qual?" 
+                                            value={anamneseData.fraturas || ''}
+                                            onChange={(e) => setAnamneseData({ ...anamneseData, fraturas: e.target.value })}
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-zinc-500 uppercase font-bold">Tratamento médico atual?</label>
+                                          <input 
+                                            type="text" 
+                                            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                            placeholder="Qual?" 
+                                            value={anamneseData.tratamentoMedico || ''}
+                                            onChange={(e) => setAnamneseData({ ...anamneseData, tratamentoMedico: e.target.value })}
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-zinc-500 uppercase font-bold">Medicação controlada?</label>
+                                          <input 
+                                            type="text" 
+                                            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                            placeholder="Qual?" 
+                                            value={anamneseData.medicacaoControlada || ''}
+                                            onChange={(e) => setAnamneseData({ ...anamneseData, medicacaoControlada: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="space-y-4">
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-zinc-500 uppercase font-bold">Outro exercício físico?</label>
+                                          <input 
+                                            type="text" 
+                                            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                            placeholder="Qual?" 
+                                            value={anamneseData.outroExercicio || ''}
+                                            onChange={(e) => setAnamneseData({ ...anamneseData, outroExercicio: e.target.value })}
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] text-zinc-500 uppercase font-bold">Alergias?</label>
+                                          <input 
+                                            type="text" 
+                                            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                            placeholder="Qual?" 
+                                            value={anamneseData.alergias || ''}
+                                            onChange={(e) => setAnamneseData({ ...anamneseData, alergias: e.target.value })}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-6 border-t border-zinc-800">
+                                      <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-4">Condições e Restrições</h5>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {[
+                                          { id: 'resp', label: 'Problemas Respiratórios' },
+                                          { id: 'card', label: 'Problemas Cardíacos' },
+                                          { id: 'hiper', label: 'Hipertensão (Alta)' },
+                                          { id: 'hipo', label: 'Hipotensão (Baixa)' },
+                                          { id: 'epil', label: 'Epilepsia' },
+                                          { id: 'diab', label: 'Diabetes' },
+                                          { id: 'alim', label: 'Restrição Alimentar' }
+                                        ].map(item => (
+                                          <div key={item.id} className="bg-zinc-800/20 p-3 rounded-xl border border-zinc-800/50">
+                                            <div className="flex items-center gap-3 mb-2">
+                                              <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 accent-yellow-400" 
+                                                id={item.id} 
+                                                checked={anamneseData.condicoes?.[item.id] || false}
+                                                onChange={(e) => setAnamneseData({
+                                                  ...anamneseData,
+                                                  condicoes: { ...anamneseData.condicoes, [item.id]: e.target.checked }
+                                                })}
+                                              />
+                                              <label htmlFor={item.id} className="text-xs text-zinc-300 font-bold print:text-black">{item.label}</label>
+                                            </div>
+                                            <input 
+                                              type="text" 
+                                              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-[10px] outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" 
+                                              placeholder="Detalhes..." 
+                                              value={anamneseData.condicoesDetalhes?.[item.id] || ''}
+                                              onChange={(e) => setAnamneseData({
+                                                ...anamneseData,
+                                                condicoesDetalhes: { ...anamneseData.condicoesDetalhes, [item.id]: e.target.value }
+                                              })}
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        </div>
 
-                        {/* Condições Específicas */}
-                        <div className="space-y-6">
-                          <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2 print:text-black">
-                            <Layers size={16} /> Condições e Restrições
-                          </h4>
-                          <div className="grid grid-cols-1 gap-3">
-                            {[
-                              { id: 'resp', label: 'Problemas Respiratórios' },
-                              { id: 'card', label: 'Problemas Cardíacos' },
-                              { id: 'hiper', label: 'Hipertensão (Alta)' },
-                              { id: 'hipo', label: 'Hipotensão (Baixa)' },
-                              { id: 'epil', label: 'Epilepsia' },
-                              { id: 'diab', label: 'Diabetes' },
-                              { id: 'alim', label: 'Restrição Alimentar' }
-                            ].map(item => (
-                              <div key={item.id} className="space-y-1">
-                                <div className="flex items-center gap-3">
-                                  <input type="checkbox" className="w-4 h-4 accent-yellow-400" id={item.id} />
-                                  <label htmlFor={item.id} className="text-sm text-zinc-300 print:text-black">{item.label}</label>
-                                </div>
-                                <input type="text" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1 text-[10px] outline-none focus:border-yellow-400 print:border-zinc-300 print:bg-white" placeholder="Detalhes..." />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Patologias (Checkboxes) */}
-                        <div className="md:col-span-3 bg-zinc-800/20 p-6 rounded-2xl border border-zinc-800 print:bg-zinc-50 print:border-zinc-200">
-                          <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest mb-6 flex items-center gap-2 print:text-black">
-                            <ShieldAlert size={16} /> Patologias e Transtornos (Diagnóstico)
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {[
-                              { id: 'tdah', label: 'TDAH (Déficit de Atenção/Hiperatividade)' },
-                              { id: 'tea', label: 'TEA (Autismo)' },
-                              { id: 'tod', label: 'TOD (Transtorno Opositor Desafiador)' },
-                              { id: 'di', label: 'DI (Déficit Intelectual)' },
-                              { id: 'ans', label: 'Ansiedade' }
-                            ].map(pat => (
-                              <div key={pat.id} className="flex items-center gap-3">
-                                <input type="checkbox" className="w-5 h-5 accent-yellow-400 rounded-md" id={pat.id} />
-                                <label htmlFor={pat.id} className="text-sm text-zinc-300 font-medium print:text-black">{pat.label}</label>
-                              </div>
-                            ))}
-                            <div className="md:col-span-3 space-y-2">
-                              <label className="text-[10px] text-zinc-500 uppercase font-bold">Outras patologias ou observações importantes</label>
-                              <textarea className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-yellow-400 min-h-[100px] print:border-zinc-300 print:bg-white" placeholder="Descreva aqui..."></textarea>
+                          {/* Patologias */}
+                          <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-800/10">
+                            <button 
+                              onClick={() => setExpandedAnamneseSection(expandedAnamneseSection === 'patologias' ? null : 'patologias')}
+                              className="w-full p-4 flex items-center justify-between bg-zinc-800/30 hover:bg-zinc-800/50 transition-all print:hidden"
+                            >
+                              <h4 className="text-yellow-400 font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <Layers size={16} /> Patologias e Transtornos
+                              </h4>
+                              <ChevronDown className={cn("text-zinc-500 transition-transform", expandedAnamneseSection === 'patologias' && "rotate-180")} size={18} />
+                            </button>
+                            <div className="hidden print:block p-4 border-b border-zinc-200">
+                              <h4 className="text-black font-black uppercase text-xs tracking-widest flex items-center gap-2">
+                                <Layers size={16} /> Patologias e Transtornos
+                              </h4>
                             </div>
+                            <AnimatePresence initial={false}>
+                              {(expandedAnamneseSection === 'patologias' || true) && (
+                                <motion.div
+                                  initial={expandedAnamneseSection === 'patologias' ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+                                  animate={{ 
+                                    height: expandedAnamneseSection === 'patologias' ? 'auto' : 0, 
+                                    opacity: expandedAnamneseSection === 'patologias' ? 1 : 0 
+                                  }}
+                                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                                  className="overflow-hidden print:!h-auto print:!opacity-100"
+                                >
+                                  <div className="p-6 space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                      {[
+                                        { id: 'tdah', label: 'TDAH (Déficit de Atenção/Hiperatividade)' },
+                                        { id: 'tea', label: 'TEA (Autismo)' },
+                                        { id: 'tod', label: 'TOD (Transtorno Opositor Desafiador)' },
+                                        { id: 'di', label: 'DI (Déficit Intelectual)' },
+                                        { id: 'ans', label: 'Ansiedade' }
+                                      ].map(pat => (
+                                        <div key={pat.id} className="flex items-center gap-3 bg-zinc-800/20 p-3 rounded-xl border border-zinc-800/50">
+                                          <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 accent-yellow-400 rounded-md" 
+                                            id={pat.id} 
+                                            checked={anamneseData.patologias?.[pat.id] || false}
+                                            onChange={(e) => setAnamneseData({
+                                              ...anamneseData,
+                                              patologias: { ...anamneseData.patologias, [pat.id]: e.target.checked }
+                                            })}
+                                          />
+                                          <label htmlFor={pat.id} className="text-sm text-zinc-300 font-medium print:text-black">{pat.label}</label>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-[10px] text-zinc-500 uppercase font-bold">Outras patologias ou observações importantes</label>
+                                      <textarea 
+                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-yellow-400 min-h-[120px] print:border-zinc-300 print:bg-white" 
+                                        placeholder="Descreva aqui..."
+                                        value={anamneseData.observacoes || ''}
+                                        onChange={(e) => setAnamneseData({ ...anamneseData, observacoes: e.target.value })}
+                                      ></textarea>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </div>
                       </div>
@@ -4482,54 +4928,119 @@ const AppContent = () => {
                   <CalendarDays className="text-yellow-400" /> Próximos Eventos e Presença
                 </h3>
                 <div className="space-y-6">
-                  {eventos.map(evento => (
-                    <div key={evento.id} className="bg-zinc-800/50 p-6 rounded-2xl border border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-6">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-yellow-400/10 p-3 rounded-xl text-yellow-400">
-                          <Trophy size={24} />
+                  {eventos.map(evento => {
+                    const isExpanded = expandedEventoId === evento.id;
+                    return (
+                      <div key={evento.id} className="bg-zinc-800/50 rounded-2xl border border-zinc-800 overflow-hidden transition-all">
+                        <div 
+                          className="p-6 flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:bg-zinc-800/80 transition-colors"
+                          onClick={() => setExpandedEventoId(isExpanded ? null : evento.id)}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="bg-yellow-400/10 p-3 rounded-xl text-yellow-400">
+                              <Trophy size={24} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-lg">{evento.nome}</p>
+                              <p className="text-sm text-zinc-500">{evento.cidade} - {evento.uf} • {new Date(evento.dataInicio).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-3 items-center">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEscalacaoEventoId(evento.id);
+                                setEscalacaoEventoNome(evento.nome);
+                                setCurrentView('escalacao');
+                              }}
+                              className="bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-2"
+                            >
+                              <Trophy size={14} /> Escalação
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEventAttendance(prev => ({ ...prev, [evento.id]: 'confirmado' }));
+                              }}
+                              className={cn(
+                                "px-6 py-2 rounded-xl text-xs font-black uppercase border transition-all",
+                                eventAttendance[evento.id] === 'confirmado' 
+                                  ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/20" 
+                                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-emerald-500/50"
+                              )}
+                            >
+                              Vou Participar
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEventAttendance(prev => ({ ...prev, [evento.id]: 'ausente' }));
+                              }}
+                              className={cn(
+                                "px-6 py-2 rounded-xl text-xs font-black uppercase border transition-all",
+                                eventAttendance[evento.id] === 'ausente' 
+                                  ? "bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/20" 
+                                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-rose-500/50"
+                              )}
+                            >
+                              Não Vou
+                            </button>
+                            <motion.div
+                              animate={{ rotate: isExpanded ? 180 : 0 }}
+                              className="text-zinc-500 ml-2"
+                            >
+                              <ChevronDown size={20} />
+                            </motion.div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-lg">{evento.nome}</p>
-                          <p className="text-sm text-zinc-500">{evento.cidade} - {evento.uf} • {new Date(evento.dataInicio).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-3">
-                        <button 
-                          onClick={() => {
-                            setEscalacaoEventoId(evento.id);
-                            setEscalacaoEventoNome(evento.nome);
-                            setCurrentView('escalacao');
-                          }}
-                          className="bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-2"
-                        >
-                          <Trophy size={14} /> Escalação
-                        </button>
-                        <button 
-                          onClick={() => setEventAttendance(prev => ({ ...prev, [evento.id]: 'confirmado' }))}
-                          className={cn(
-                            "px-6 py-2 rounded-xl text-xs font-black uppercase border transition-all",
-                            eventAttendance[evento.id] === 'confirmado' 
-                              ? "bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/20" 
-                              : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-emerald-500/50"
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="border-t border-zinc-800 bg-black/20"
+                            >
+                              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                  <div>
+                                    <p className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">Endereço Completo</p>
+                                    <p className="text-zinc-300 flex items-start gap-3">
+                                      <MapPin size={20} className="text-yellow-400 shrink-0 mt-1" />
+                                      <span>
+                                        {evento.endereco}<br />
+                                        {evento.cidade} - {evento.uf}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="space-y-6">
+                                  <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                      <p className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">Início</p>
+                                      <p className="text-zinc-300 flex items-center gap-3">
+                                        <CalendarDays size={20} className="text-yellow-400" />
+                                        {new Date(evento.dataInicio).toLocaleDateString('pt-BR')} às {evento.horario}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">Término</p>
+                                      <p className="text-zinc-300 flex items-center gap-3">
+                                        <CalendarDays size={20} className="text-yellow-400" />
+                                        {new Date(evento.dataFim).toLocaleDateString('pt-BR')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
                           )}
-                        >
-                          Vou Participar
-                        </button>
-                        <button 
-                          onClick={() => setEventAttendance(prev => ({ ...prev, [evento.id]: 'ausente' }))}
-                          className={cn(
-                            "px-6 py-2 rounded-xl text-xs font-black uppercase border transition-all",
-                            eventAttendance[evento.id] === 'ausente' 
-                              ? "bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/20" 
-                              : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-rose-500/50"
-                          )}
-                        >
-                          Não Vou
-                        </button>
+                        </AnimatePresence>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -4664,24 +5175,80 @@ const AppContent = () => {
                     <Trophy className="text-yellow-400" /> Eventos Cadastrados
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {eventos.map(evento => (
-                      <div key={evento.id} className="bg-zinc-800/50 p-6 rounded-2xl border border-zinc-800 flex justify-between items-center group hover:border-yellow-400/50 transition-all">
-                        <div>
-                          <p className="font-bold text-zinc-100">{evento.nome}</p>
-                          <p className="text-xs text-zinc-500 mt-1">{evento.cidade} - {evento.uf} • {new Date(evento.dataInicio).toLocaleDateString('pt-BR')}</p>
+                    {eventos.map(evento => {
+                      const isExpanded = expandedEventoId === evento.id;
+                      return (
+                        <div key={evento.id} className="bg-zinc-800/50 rounded-2xl border border-zinc-800 overflow-hidden group hover:border-yellow-400/50 transition-all">
+                          <div 
+                            className="p-6 flex justify-between items-center cursor-pointer"
+                            onClick={() => setExpandedEventoId(isExpanded ? null : evento.id)}
+                          >
+                            <div>
+                              <p className="font-bold text-zinc-100">{evento.nome}</p>
+                              <p className="text-xs text-zinc-500 mt-1">{evento.cidade} - {evento.uf} • {new Date(evento.dataInicio).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEscalacaoEventoId(evento.id);
+                                  setEscalacaoEventoNome(evento.nome);
+                                  setCurrentView('escalacao');
+                                }}
+                                className="bg-zinc-700 text-white p-3 rounded-xl hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-2 text-xs font-black uppercase"
+                              >
+                                <Trophy size={16} /> Escalar
+                              </button>
+                              <motion.div
+                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                                className="text-zinc-500"
+                              >
+                                <ChevronDown size={20} />
+                              </motion.div>
+                            </div>
+                          </div>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="border-t border-zinc-800 bg-black/20"
+                              >
+                                <div className="p-6 space-y-4">
+                                  <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Endereço</p>
+                                      <p className="text-sm text-zinc-300 flex items-start gap-2">
+                                        <MapPin size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+                                        {evento.endereco}
+                                      </p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Data Fim</p>
+                                        <p className="text-sm text-zinc-300 flex items-center gap-2">
+                                          <CalendarDays size={16} className="text-yellow-400" />
+                                          {new Date(evento.dataFim).toLocaleDateString('pt-BR')}
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Horário</p>
+                                        <p className="text-sm text-zinc-300 flex items-center gap-2">
+                                          <Clock size={16} className="text-yellow-400" />
+                                          {evento.horario}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
-                        <button 
-                          onClick={() => {
-                            setEscalacaoEventoId(evento.id);
-                            setEscalacaoEventoNome(evento.nome);
-                            setCurrentView('escalacao');
-                          }}
-                          className="bg-zinc-700 text-white p-3 rounded-xl hover:bg-yellow-400 hover:text-black transition-all flex items-center gap-2 text-xs font-black uppercase"
-                        >
-                          <Trophy size={16} /> Escalar
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
