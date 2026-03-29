@@ -1,111 +1,77 @@
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  where, 
+  getDoc,
+  getDocs,
+  addDoc,
+  orderBy,
+  limit,
+  Timestamp,
+  serverTimestamp,
+  increment,
+  arrayUnion,
+  arrayRemove,
+  writeBatch
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  signInWithRedirect,
+  getRedirectResult
+} from 'firebase/auth';
 
-// Local Storage implementation of a subset of Firestore API
-type Callback = (snapshot: { docs: any[] }) => void;
-const listeners: { [key: string]: Callback[] } = {};
+// Import the Firebase configuration
+import firebaseConfig from '../firebase-applet-config.json';
 
-const getCollectionData = (collectionName: string) => {
-  const data = localStorage.getItem(`pirua_${collectionName}`);
-  return data ? JSON.parse(data) : [];
+// Initialize Firebase SDK
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+
+// Re-export Firestore functions
+export { 
+  collection, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  where, 
+  getDoc,
+  getDocs,
+  addDoc,
+  orderBy,
+  limit,
+  Timestamp,
+  serverTimestamp,
+  increment,
+  arrayUnion,
+  arrayRemove,
+  writeBatch
 };
 
-const setCollectionData = (collectionName: string, data: any[]) => {
-  localStorage.setItem(`pirua_${collectionName}`, JSON.stringify(data));
-  // Notify listeners
-  if (listeners[collectionName]) {
-    listeners[collectionName].forEach(cb => cb({ docs: data.map(d => ({ id: d.id, data: () => d })) }));
-  }
+// Re-export Auth functions
+export { 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  signInWithRedirect,
+  getRedirectResult
 };
 
-export const db = {};
-
-export const collection = (db: any, name: string) => name;
-
-export const doc = (db: any, collectionName: string, id?: string) => ({ collectionName, id });
-
-export const setDoc = async (docRef: any, data: any, options?: any) => {
-  const collectionData = getCollectionData(docRef.collectionName);
-  const index = collectionData.findIndex((d: any) => d.id === docRef.id);
-  
-  let newData;
-  if (index >= 0) {
-    if (options?.merge) {
-      newData = { ...collectionData[index], ...data };
-    } else {
-      newData = { ...data, id: docRef.id };
-    }
-    collectionData[index] = newData;
-  } else {
-    newData = { ...data, id: docRef.id };
-    collectionData.push(newData);
-  }
-  
-  setCollectionData(docRef.collectionName, collectionData);
-};
-
-export const updateDoc = async (docRef: any, data: any) => {
-  const collectionData = getCollectionData(docRef.collectionName);
-  const index = collectionData.findIndex((d: any) => d.id === docRef.id);
-  if (index >= 0) {
-    collectionData[index] = { ...collectionData[index], ...data };
-    setCollectionData(docRef.collectionName, collectionData);
-  }
-};
-
-export const deleteDoc = async (docRef: any) => {
-  const collectionData = getCollectionData(docRef.collectionName);
-  const filtered = collectionData.filter((d: any) => d.id !== docRef.id);
-  setCollectionData(docRef.collectionName, filtered);
-};
-
-export const onSnapshot = (collectionName: string | any, callback: Callback, errorCallback?: (err: any) => void) => {
-  const name = typeof collectionName === 'string' ? collectionName : collectionName.collectionName;
-  if (!listeners[name]) listeners[name] = [];
-  listeners[name].push(callback);
-  
-  // Initial call
-  try {
-    const data = getCollectionData(name);
-    callback({ docs: data.map((d: any) => ({ id: d.id, data: () => d })) });
-  } catch (err) {
-    if (errorCallback) errorCallback(err);
-  }
-  
-  return () => {
-    listeners[name] = listeners[name].filter(cb => cb !== callback);
-  };
-};
-
-export const query = (col: any, ...args: any[]) => ({ collectionName: col });
-export const where = (...args: any[]) => ({});
-
-export const getDoc = async (docRef: any) => {
-  const collectionData = getCollectionData(docRef.collectionName);
-  const data = collectionData.find((d: any) => d.id === docRef.id);
-  return {
-    exists: () => !!data,
-    data: () => data
-  };
-};
-
-// Mock Auth
-export const auth = {
-  currentUser: { uid: 'local-user', email: 'admin@local', displayName: 'Administrador', photoURL: null }
-};
-
-export const googleProvider = {};
-export const signInWithPopup = async () => ({ user: auth.currentUser });
-export const signInWithRedirect = async () => {};
-export const getRedirectResult = async (authInstance?: any) => null;
-export const signOut = async (authInstance?: any) => {
-  // In local mode, we don't really sign out
-};
-export const onAuthStateChanged = (authInstance: any, callback: (user: any) => void) => {
-  // Always return the mock user
-  setTimeout(() => callback(auth.currentUser), 0);
-  return () => {};
-};
-
-export const handleFirestoreError = (err: any, operation?: string, path?: string) => console.error(`[${operation}] Error at ${path}:`, err);
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -113,4 +79,46 @@ export enum OperationType {
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }

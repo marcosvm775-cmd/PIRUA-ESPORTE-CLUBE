@@ -2,49 +2,108 @@
   "entities": {
     "Aluno": {
       "title": "Aluno",
-      "description": "Cadastro de alunos da escolinha",
+      "description": "Dados do aluno da escolinha",
       "type": "object",
       "properties": {
-        "nome": { "type": "string", "description": "Nome completo do aluno" },
-        "dataNascimento": { "type": "string", "description": "Data de nascimento (DD/MM/AAAA)" },
-        "categoria": { "type": "string", "description": "Categoria (Sub-7, Sub-9, etc.)" },
-        "dataInscricao": { "type": "string", "description": "Data de inscrição" },
-        "status": { "type": "string", "description": "Status (Ativo/Inativo)" },
-        "foto": { "type": "string", "description": "URL da foto ou base64" },
-        "responsavel": { "type": "string", "description": "Nome do responsável" },
-        "telefone": { "type": "string", "description": "Telefone de contato" },
-        "endereco": { "type": "string", "description": "Endereço completo" },
-        "uid": { "type": "string", "description": "ID do usuário que criou o registro" }
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "dataNascimento": { "type": "string" },
+        "categoria": { "type": "string" },
+        "sub": { "type": "string" },
+        "status": { "type": "string" },
+        "foto": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "matricula": { "type": "string" },
+        "dataMatricula": { "type": "string" },
+        "numeroCamisa": { "type": "string" },
+        "posicao": { "type": "string" }
       },
-      "required": ["nome", "categoria", "uid"]
+      "required": ["nome", "sub"]
     },
     "Evento": {
       "title": "Evento",
-      "description": "Eventos e agenda da escolinha",
+      "description": "Eventos, jogos e treinos",
       "type": "object",
       "properties": {
-        "nome": { "type": "string", "description": "Nome do evento" },
-        "dataInicio": { "type": "string", "description": "Data de início (YYYY-MM-DD)" },
-        "dataFim": { "type": "string", "description": "Data de término" },
-        "horario": { "type": "string", "description": "Horário do evento" },
-        "local": { "type": "string", "description": "Local do evento" },
-        "descricao": { "type": "string", "description": "Descrição detalhada" },
-        "tipo": { "type": "string", "description": "Tipo de evento (Treino, Jogo, Reunião)" },
-        "uid": { "type": "string", "description": "ID do usuário que criou o registro" }
+        "id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "data": { "type": "string" },
+        "horario": { "type": "string" },
+        "local": { "type": "string" },
+        "tipo": { "type": "string" },
+        "descricao": { "type": "string" }
       },
-      "required": ["nome", "dataInicio", "uid"]
+      "required": ["titulo", "data"]
     },
-    "User": {
-      "title": "User",
-      "description": "Perfil do usuário/administrador",
+    "Professor": {
+      "title": "Professor",
+      "description": "Professores e comissão técnica",
       "type": "object",
       "properties": {
-        "displayName": { "type": "string" },
-        "email": { "type": "string" },
-        "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "user"] }
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "cargo": { "type": "string" },
+        "foto": { "type": "string" }
       },
-      "required": ["email", "role"]
+      "required": ["nome"]
+    },
+    "Escalacao": {
+      "title": "Escalacao",
+      "description": "Escalação de jogadores para um evento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventoId": { "type": "string" },
+        "jogadores": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["eventoId"]
+    },
+    "Presenca": {
+      "title": "Presenca",
+      "description": "Registro de presença em treinos/eventos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventoId": { "type": "string" },
+        "alunoId": { "type": "string" },
+        "presente": { "type": "boolean" },
+        "data": { "type": "string" }
+      },
+      "required": ["eventoId", "alunoId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Configurações do clube",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clubName": { "type": "string" },
+        "clubShield": { "type": "string" },
+        "colors": {
+          "type": "object",
+          "properties": {
+            "primary": { "type": "string" },
+            "secondary": { "type": "string" }
+          }
+        }
+      }
+    },
+    "SolicitacaoCadastro": {
+      "title": "SolicitacaoCadastro",
+      "description": "Solicitações de novos alunos via QR Code",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "dataNascimento": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "sub": { "type": "string" },
+        "status": { "type": "string" },
+        "dataSolicitacao": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -56,9 +115,25 @@
       "schema": "Evento",
       "description": "Coleção de eventos"
     },
-    "/users/{userId}": {
-      "schema": "User",
-      "description": "Coleção de usuários"
+    "/professores/{professorId}": {
+      "schema": "Professor",
+      "description": "Coleção de professores"
+    },
+    "/escalacoes/{escalacaoId}": {
+      "schema": "Escalacao",
+      "description": "Coleção de escalações"
+    },
+    "/presencas/{presencaId}": {
+      "schema": "Presenca",
+      "description": "Coleção de presenças"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Configurações do clube"
+    },
+    "/solicitacoes_cadastro/{solicitacaoId}": {
+      "schema": "SolicitacaoCadastro",
+      "description": "Solicitações de cadastro"
     }
   }
 }

@@ -1,43 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
     // ===============================================================
     // Assumed Data Model
     // ===============================================================
     //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - displayName: string
-    //   - email: string
-    //   - photoURL: string
-    //   - role: string (admin, user)
-    //
     // Collection: alunos
-    // Document ID: {alunoId}
-    // Fields:
-    //   - nome: string (required)
-    //   - dataNascimento: string
-    //   - categoria: string (required)
-    //   - dataInscricao: string
-    //   - status: string
-    //   - foto: string
-    //   - responsavel: string
-    //   - telefone: string
-    //   - endereco: string
-    //   - uid: string (required, owner)
+    // Document ID: auto-generated or manual
+    // Fields: nome, sub, status, dataNascimento, categoria, foto, whatsapp, matricula, dataMatricula, numeroCamisa, posicao
     //
     // Collection: eventos
-    // Document ID: {eventoId}
-    // Fields:
-    //   - nome: string (required)
-    //   - dataInicio: string (required)
-    //   - dataFim: string
-    //   - horario: string
-    //   - local: string
-    //   - descricao: string
-    //   - tipo: string
-    //   - uid: string (required, owner)
+    // Document ID: auto-generated
+    // Fields: titulo, data, horario, local, tipo, descricao
+    //
+    // Collection: professores
+    // Document ID: auto-generated
+    // Fields: nome, cargo, foto
+    //
+    // Collection: escalacoes
+    // Document ID: auto-generated
+    // Fields: eventoId, jogadores (array)
+    //
+    // Collection: presencas
+    // Document ID: auto-generated
+    // Fields: eventoId, alunoId, presente, data
+    //
+    // Collection: settings
+    // Document ID: 'main' or auto-generated
+    // Fields: clubName, clubShield, colors (map)
+    //
+    // Collection: solicitacoes_cadastro
+    // Document ID: auto-generated
+    // Fields: nome, dataNascimento, whatsapp, sub, status, dataSolicitacao
     //
     // ===============================================================
 
@@ -49,67 +44,31 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "marcos.vm775@gmail.com" && request.auth.token.email_verified == true));
+      return isAuthenticated() && 
+        (request.auth.token.email == "marcos.vm775@gmail.com" && request.auth.token.email_verified == true);
     }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
     }
 
-    function isValidUrl(url) {
-      return url is string && (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:image/.*"));
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
-
-    function isValidUser(data) {
-      return data.keys().hasOnly(['displayName', 'email', 'photoURL', 'role']) &&
-             data.email is string && isValidEmail(data.email) &&
-             data.role in ['admin', 'user'];
-    }
-
-    function isValidAluno(data) {
-      return data.keys().hasAll(['nome', 'categoria', 'uid']) &&
-             data.nome is string && data.nome.size() > 0 && data.nome.size() < 100 &&
-             data.categoria is string &&
-             data.uid == request.auth.uid;
-    }
-
-    function isValidEvento(data) {
-      return data.keys().hasAll(['nome', 'dataInicio', 'uid']) &&
-             data.nome is string && data.nome.size() > 0 && data.nome.size() < 100 &&
-             data.uid == request.auth.uid;
+    function hasOnlyAllowedFields(data, allowedFields) {
+      return data.keys().hasOnly(allowedFields);
     }
 
     // ===============================================================
     // Rules
     // ===============================================================
 
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
-    }
-
     match /alunos/{alunoId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidAluno(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin()) && isValidAluno(request.resource.data);
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    match /anamneses/{alunoId} {
+    match /eventos/{eventoId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() || isAdmin();
+      allow write: if isAdmin();
     }
 
     match /professores/{professorId} {
@@ -117,14 +76,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /eventos/{eventoId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidEvento(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin()) && isValidEvento(request.resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /escalacoes/{eventoId} {
+    match /escalacoes/{escalacaoId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
@@ -135,17 +87,14 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
-    match /solicitacoes_cadastro/{id} {
-      allow create: if true;
-      allow read, delete: if isAdmin();
-    }
-
-    match /{path=**} {
-      allow read, write: if false;
+    match /solicitacoes_cadastro/{solicitacaoId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // Allow anyone to request registration
+      allow update, delete: if isAdmin();
     }
   }
 }

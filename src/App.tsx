@@ -766,6 +766,19 @@ const AppContent = () => {
 
   // --- Firebase Auth ---
   useEffect(() => {
+    // Connection test
+    const testConnection = async () => {
+      try {
+        const { getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'settings', 'connection-test'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
+        }
+      }
+    };
+    testConnection();
+
     // Handle redirect result
     getRedirectResult(auth).catch((error) => {
       console.error("Erro ao processar redirecionamento:", error);
@@ -783,9 +796,22 @@ const AppContent = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = async () => {};
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      alert("Erro ao fazer login com Google.");
+    }
+  };
+
   const handleLogout = async () => {
-    setCurrentView('dashboard');
+    try {
+      await signOut(auth);
+      setCurrentView('dashboard');
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+    }
   };
 
   // --- Sync ---
@@ -1642,6 +1668,48 @@ const AppContent = () => {
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-zinc-400 font-bold uppercase tracking-widest animate-pulse">Carregando Piruá Cloud...</p>
+      </div>
+    );
+  }
+
+  if (!user && currentView !== 'public_registration') {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-yellow-400/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yellow-400/10 rounded-full blur-[120px]" />
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 w-full max-w-md"
+        >
+          <div className="mb-12">
+            <div className="w-32 h-32 bg-zinc-900 rounded-3xl border border-zinc-800 flex items-center justify-center mx-auto mb-6 shadow-2xl">
+              <img src={clubShield} alt="Piruá E.C" className="w-24 h-24 object-contain" />
+            </div>
+            <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-2 italic">Piruá <span className="text-yellow-400">Cloud</span></h1>
+            <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Sistema de Gestão Esportiva</p>
+          </div>
+
+          <div className="bg-zinc-900/50 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
+            <p className="text-zinc-400 text-sm mb-8">Acesse sua conta para gerenciar atletas, eventos e relatórios do clube.</p>
+            
+            <button 
+              onClick={handleLogin}
+              className="w-full bg-white text-black h-14 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all group"
+            >
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+              Entrar com Google
+            </button>
+
+            <div className="mt-8 pt-8 border-t border-white/5">
+              <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest">
+                © {new Date().getFullYear()} Piruá Esporte Clube • Todos os direitos reservados
+              </p>
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
