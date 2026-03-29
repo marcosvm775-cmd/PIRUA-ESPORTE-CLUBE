@@ -390,12 +390,27 @@ const PublicRegistrationForm = ({ onComplete }: { onComplete: () => void }) => {
     setLoading(true);
     try {
       const id = Date.now().toString();
-      await setDoc(doc(db, 'solicitacoes_cadastro', id), {
+      const solicitacaoData = {
         ...formData,
         id,
-        status: 'pendente',
+        status: 'pendente' as const,
         createdAt: new Date().toISOString()
+      };
+
+      // Save to Supabase
+      try {
+        await supabaseService.saveSolicitacao(solicitacaoData);
+        console.log("Solicitação salva no Supabase");
+      } catch (supaError) {
+        console.error("Erro ao salvar solicitação no Supabase:", supaError);
+      }
+
+      // Backup to Firestore
+      await setDoc(doc(db, 'solicitacoes_cadastro', id), {
+        ...solicitacaoData,
+        uid: 'public'
       });
+
       alert('Solicitação enviada com sucesso! Aguarde o contato do clube.');
       onComplete();
     } catch (error) {
@@ -903,7 +918,7 @@ const AppContent = () => {
     }
   };
 
-  // --- Sync ---
+  // --- Sync (Supabase) ---
   useEffect(() => {
     if (!user) {
       // Reset data to mock or empty when logged out
@@ -913,78 +928,93 @@ const AppContent = () => {
       setEventLineups({});
       setPresencas({});
       setPresencasHistory([]);
+      setSolicitacoes([]);
       return;
     }
 
-    const unsubAlunos = onSnapshot(collection(db, 'alunos'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aluno));
-      setAlunos(data.length > 0 ? data : MOCK_ALUNOS);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'alunos'));
+    const fetchData = async () => {
+      if (!isSupabaseConnected) return;
 
-    const unsubEventos = onSnapshot(collection(db, 'eventos'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evento));
-      setEventos(data.length > 0 ? data : MOCK_EVENTOS);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'eventos'));
+      try {
+        const [
+          alunosData, 
+          eventosData, 
+          professoresData, 
+          escalacoesData, 
+          presencasData, 
+          settingsData,
+          solicitacoesData,
+          anamnesesData
+        ] = await Promise.all([
+          supabaseService.getAlunos(),
+          supabaseService.getEventos(),
+          supabaseService.getProfessores(),
+          supabaseService.getEscalacoes(),
+          supabaseService.getPresencas(),
+          supabaseService.getSettings(),
+          supabaseService.getSolicitacoes(),
+          supabaseService.getAnamneses()
+        ]);
 
-    const unsubProfessores = onSnapshot(collection(db, 'professores'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Professor));
-      setProfessores(data.length > 0 ? data : MOCK_PROFESSORES);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'professores'));
+        setAlunos(alunosData.length > 0 ? alunosData : MOCK_ALUNOS);
+        setEventos(eventosData.length > 0 ? eventosData : MOCK_EVENTOS);
+        setProfessores(professoresData.length > 0 ? professoresData : MOCK_PROFESSORES);
+        
+        const formattedEsc: Record<string, string[]> = {};
+        escalacoesData.forEach(esc => {
+          formattedEsc[esc.eventoId] = esc.lista;
+        });
+        setEventLineups(formattedEsc);
 
-    const unsubEscalacoes = onSnapshot(collection(db, 'escalacoes'), (snapshot) => {
-      const formattedEsc: Record<string, string[]> = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        formattedEsc[data.eventoId] = data.lista;
-      });
-      setEventLineups(formattedEsc);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'escalacoes'));
+        const today = new Date().toISOString().split('T')[0];
+        const todayPresencas: Record<string, 'presente' | 'falta' | 'justificado'> = {};
+        const history: Presenca[] = [];
+        presencasData.forEach((data: any) => {
+          const p: Presenca = {
+            id: data.id.toString(),
+            alunoId: data.aluno_id,
+            status: data.status,
+            date: data.data,
+            uid: data.uid || ''
+          };
+          history.push(p);
+          if (p.date === today) {
+            todayPresencas[p.alunoId] = p.status;
+          }
+        });
+        setPresencas(todayPresencas);
+        setPresencasHistory(history);
 
-    const unsubPresencas = onSnapshot(collection(db, 'presencas'), (snapshot) => {
-      const today = new Date().toISOString().split('T')[0];
-      const todayPresencas: Record<string, 'presente' | 'falta' | 'justificado'> = {};
-      const history: Presenca[] = [];
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as Presenca;
-        history.push({ ...data, id: doc.id });
-        if (data.date === today) {
-          todayPresencas[data.alunoId] = data.status;
-        }
-      });
-      setPresencas(todayPresencas);
-      setPresencasHistory(history);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'presencas'));
+        if (settingsData.clubShield) setClubShield(settingsData.clubShield);
+        if (settingsData.instagramLink) setInstagramLink(settingsData.instagramLink);
+        if (settingsData.whatsappLink) setWhatsappLink(settingsData.whatsappLink);
 
-    const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (doc.id === 'clubShield') setClubShield(data.value);
-        if (doc.id === 'instagramLink') setInstagramLink(data.value);
-        if (doc.id === 'whatsappLink') setWhatsappLink(data.value);
-      });
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'settings'));
+        setSolicitacoes(solicitacoesData);
+        setAnamneses(anamnesesData);
+      } catch (error) {
+        console.error("Erro ao buscar dados do Supabase:", error);
+      }
+    };
+
+    fetchData();
+
+    // Real-time subscriptions
+    const channels = [
+      supabase.channel('public:alunos').on('postgres_changes', { event: '*', schema: 'public', table: 'alunos' }, fetchData).subscribe(),
+      supabase.channel('public:eventos').on('postgres_changes', { event: '*', schema: 'public', table: 'eventos' }, fetchData).subscribe(),
+      supabase.channel('public:professores').on('postgres_changes', { event: '*', schema: 'public', table: 'professores' }, fetchData).subscribe(),
+      supabase.channel('public:escalacoes').on('postgres_changes', { event: '*', schema: 'public', table: 'escalacoes' }, fetchData).subscribe(),
+      supabase.channel('public:presencas').on('postgres_changes', { event: '*', schema: 'public', table: 'presencas' }, fetchData).subscribe(),
+      supabase.channel('public:settings').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, fetchData).subscribe(),
+      supabase.channel('public:solicitacoes_cadastro').on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_cadastro' }, fetchData).subscribe(),
+    ];
 
     return () => {
-      unsubAlunos();
-      unsubEventos();
-      unsubProfessores();
-      unsubSettings();
-      unsubEscalacoes();
-      unsubPresencas();
+      channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, [user]);
+  }, [user, isSupabaseConnected]);
 
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (user && userRole === 'admin') {
-      const unsubSolicitacoes = onSnapshot(collection(db, 'solicitacoes_cadastro'), (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-        setSolicitacoes(data);
-      }, (error) => handleFirestoreError(error, OperationType.LIST, 'solicitacoes_cadastro'));
-      return () => unsubSolicitacoes();
-    }
-  }, [user, userRole]);
 
   const handleApproveSolicitacao = async (solicitacao: any) => {
     try {
@@ -995,13 +1025,12 @@ const AppContent = () => {
         outroExercicio, alergias, ...alunoData 
       } = solicitacao;
       
-      await setDoc(doc(db, 'alunos', alunoId), {
+      const newAluno = {
         ...alunoData,
-        status: 'ativo',
-        uid: user.uid
-      });
+        status: 'ativo'
+      };
 
-      await setDoc(doc(db, 'anamneses', alunoId), {
+      const newAnamnese = {
         alunoId,
         horarioDormir,
         dificuldadeAcordar,
@@ -1013,7 +1042,29 @@ const AppContent = () => {
         medicacaoControlada,
         outroExercicio,
         alergias,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Save to Supabase
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.saveAluno(newAluno);
+          await supabaseService.saveAnamnese(newAnamnese);
+          await supabaseService.deleteSolicitacao(solicitacao.id);
+          console.log("Cadastro aprovado no Supabase");
+        } catch (supaError) {
+          console.error("Erro ao aprovar cadastro no Supabase:", supaError);
+        }
+      }
+
+      // Backup to Firestore
+      await setDoc(doc(db, 'alunos', alunoId), {
+        ...newAluno,
+        uid: user.uid
+      });
+
+      await setDoc(doc(db, 'anamneses', alunoId), {
+        ...newAnamnese,
         uid: user.uid
       });
 
@@ -1028,6 +1079,15 @@ const AppContent = () => {
   const handleRejectSolicitacao = async (id: string) => {
     if (!confirm('Deseja realmente excluir esta solicitação?')) return;
     try {
+      // Delete from Supabase
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.deleteSolicitacao(id);
+        } catch (supaError) {
+          console.error("Erro ao excluir solicitação no Supabase:", supaError);
+        }
+      }
+
       await deleteDoc(doc(db, 'solicitacoes_cadastro', id));
       alert('Solicitação removida.');
     } catch (error) {
@@ -1064,6 +1124,7 @@ const AppContent = () => {
         alunos,
         professores,
         eventos,
+        anamneses,
         presencas: presencasHistory,
         eventLineups,
         settings: {
@@ -1098,28 +1159,76 @@ const AppContent = () => {
       try {
         const data = JSON.parse(event.target?.result as string);
         
-        // Import Alunos to Firestore
+        // Import Alunos
         if (data.alunos && Array.isArray(data.alunos)) {
           for (const aluno of data.alunos) {
+            if (supabaseEnabled && isSupabaseConnected) {
+              await supabaseService.saveAluno(aluno);
+            }
             await setDoc(doc(db, 'alunos', aluno.id), aluno, { merge: true });
           }
         }
 
-        // Import Professores to Firestore
+        // Import Professores
         if (data.professores && Array.isArray(data.professores)) {
           for (const prof of data.professores) {
+            if (supabaseEnabled && isSupabaseConnected) {
+              await supabaseService.saveProfessor(prof);
+            }
             await setDoc(doc(db, 'professores', prof.id), prof, { merge: true });
           }
         }
 
-        // Import Eventos to Firestore
+        // Import Eventos
         if (data.eventos && Array.isArray(data.eventos)) {
           for (const evento of data.eventos) {
+            if (supabaseEnabled && isSupabaseConnected) {
+              await supabaseService.saveEvento(evento);
+            }
             await setDoc(doc(db, 'eventos', evento.id), evento, { merge: true });
           }
         }
 
-        // Import Settings to Firestore
+        // Import Anamneses
+        if (data.anamneses && Array.isArray(data.anamneses)) {
+          for (const anamnese of data.anamneses) {
+            if (supabaseEnabled && isSupabaseConnected) {
+              await supabaseService.saveAnamnese(anamnese);
+            }
+            await setDoc(doc(db, 'anamneses', anamnese.alunoId), anamnese, { merge: true });
+          }
+        }
+
+        // Import Presencas
+        if (data.presencas && Array.isArray(data.presencas)) {
+          // Group by date for Supabase
+          const byDate: Record<string, { alunoId: string, status: string }[]> = {};
+          for (const p of data.presencas) {
+            if (!byDate[p.date]) byDate[p.date] = [];
+            byDate[p.date].push({ alunoId: p.alunoId, status: p.status });
+            
+            const id = `${p.date}_${p.alunoId}`;
+            await setDoc(doc(db, 'presencas', id), p, { merge: true });
+          }
+          
+          if (supabaseEnabled && isSupabaseConnected) {
+            for (const [date, lista] of Object.entries(byDate)) {
+              await supabaseService.savePresencas(date, lista);
+            }
+          }
+        }
+
+        // Import Escalacoes
+        if (data.escalacoes && Array.isArray(data.escalacoes)) {
+          for (const esc of data.escalacoes) {
+            if (supabaseEnabled && isSupabaseConnected) {
+              await supabaseService.saveEscalacao(esc);
+            }
+            await setDoc(doc(db, 'escalacoes', esc.eventoId), esc, { merge: true });
+          }
+        }
+
+        // Import Settings
         if (data.settings) {
           if (data.settings.clubShield) await handleSaveSetting('clubShield', data.settings.clubShield);
           if (data.settings.instagramLink) await handleSaveSetting('instagramLink', data.settings.instagramLink);
@@ -1161,60 +1270,50 @@ const AppContent = () => {
     }
 
     try {
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveAluno(aluno);
+      }
+
+      // Secondary: Firestore (Backup)
       const alunoRef = doc(db, 'alunos', aluno.id);
       await setDoc(alunoRef, { ...aluno, uid: user.uid }, { merge: true });
       
-      // Sync to Supabase if enabled
-      if (supabaseEnabled && isSupabaseConnected) {
-        try {
-          await supabaseService.saveAluno(aluno);
-          console.log("Aluno sincronizado com Supabase");
-        } catch (supaError) {
-          console.error("Erro ao sincronizar com Supabase:", supaError);
-        }
-      }
-      
-      alert('Cadastro salvo com sucesso na nuvem!');
+      alert('Cadastro salvo com sucesso!');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'alunos');
+      console.error("Erro ao salvar aluno:", error);
+      alert('Erro ao salvar cadastro.');
     }
   };
 
   const handleDeleteAluno = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este aluno?')) {
       try {
-        await deleteDoc(doc(db, 'alunos', id));
-        
-        // Sync to Supabase if enabled
-        if (supabaseEnabled && isSupabaseConnected) {
-          try {
-            await supabaseService.deleteAluno(id);
-            console.log("Aluno excluído do Supabase");
-          } catch (supaError) {
-            console.error("Erro ao excluir aluno do Supabase:", supaError);
-          }
+        // Primary: Supabase
+        if (isSupabaseConnected) {
+          await supabaseService.deleteAluno(id);
         }
+
+        // Secondary: Firestore
+        await deleteDoc(doc(db, 'alunos', id));
         
         alert('Aluno excluído com sucesso!');
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, 'alunos');
+        console.error("Erro ao excluir aluno:", error);
+        alert('Erro ao excluir aluno.');
       }
     }
   };
 
   const handleSaveSetting = async (key: string, value: string) => {
     try {
-      await setDoc(doc(db, 'settings', key), { value, updatedAt: new Date().toISOString() });
-      
-      // Sync to Supabase if enabled
-      if (supabaseEnabled && isSupabaseConnected) {
-        try {
-          await supabaseService.saveSetting(key, value);
-          console.log(`Configuração ${key} sincronizada com Supabase`);
-        } catch (supaError) {
-          console.error("Erro ao sincronizar configuração com Supabase:", supaError);
-        }
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveSetting(key, value);
       }
+
+      // Secondary: Firestore
+      await setDoc(doc(db, 'settings', key), { value, updatedAt: new Date().toISOString() });
       
       return true;
     } catch (error) {
@@ -1225,31 +1324,56 @@ const AppContent = () => {
 
   const handleSaveProfessor = async (professor: Professor) => {
     try {
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveProfessor(professor);
+      }
+
+      // Secondary: Firestore
       await setDoc(doc(db, 'professores', professor.id), { ...professor, uid: user.uid }, { merge: true });
-      alert('Professor salvo com sucesso na nuvem!');
+      alert('Professor salvo com sucesso!');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'professores');
+      console.error("Erro ao salvar professor:", error);
+      alert('Erro ao salvar professor.');
     }
   };
 
   const handleSaveEvento = async (evento: Evento) => {
     try {
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveEvento(evento);
+      }
+
+      // Secondary: Firestore
       await setDoc(doc(db, 'eventos', evento.id), { ...evento, uid: user.uid }, { merge: true });
-      alert('Evento salvo com sucesso na nuvem!');
+      alert('Evento salvo com sucesso!');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'eventos');
+      console.error("Erro ao salvar evento:", error);
+      alert('Erro ao salvar evento.');
     }
   };
 
   const handleSaveAnamnese = async (anamneseData: any) => {
     if (!selectedAnamneseAluno) return;
     try {
-      await setDoc(doc(db, 'anamneses', selectedAnamneseAluno.id), {
+      const newAnamnese = {
         ...anamneseData,
         alunoId: selectedAnamneseAluno.id,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveAnamnese(newAnamnese);
+      }
+
+      // Secondary: Firestore
+      await setDoc(doc(db, 'anamneses', selectedAnamneseAluno.id), {
+        ...newAnamnese,
         uid: user.uid
       });
+
       alert('Anamnese salva com sucesso!');
       setCurrentView('lista_alunos');
     } catch (error) {
@@ -1259,15 +1383,22 @@ const AppContent = () => {
 
   const handleSaveEscalacao = async (eventoId: string, lista: string[]) => {
     try {
+      // Primary: Supabase
+      if (isSupabaseConnected) {
+        await supabaseService.saveEscalacao({ eventoId, lista });
+      }
+
+      // Secondary: Firestore
       await setDoc(doc(db, 'escalacoes', eventoId), {
         eventoId,
         lista,
         updatedAt: new Date().toISOString(),
         uid: user.uid
       });
-      alert('Escalação salva com sucesso na nuvem!');
+      alert('Escalação salva com sucesso!');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'escalacoes');
+      console.error("Erro ao salvar escalação:", error);
+      alert('Erro ao salvar escalação.');
     }
   };
 
@@ -1614,6 +1745,7 @@ const AppContent = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [presencas, setPresencas] = useState<Record<string, 'presente' | 'falta' | 'justificado'>>({});
   const [presencasHistory, setPresencasHistory] = useState<Presenca[]>([]);
+  const [anamneses, setAnamneses] = useState<any[]>([]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
@@ -1687,16 +1819,18 @@ const AppContent = () => {
         date,
         uid: user.uid
       };
-      await setDoc(doc(db, 'presencas', id), presencaData);
       
-      // Sync to Supabase if enabled
+      // Primary: Supabase
       if (supabaseEnabled && isSupabaseConnected) {
         try {
-          await supabaseService.savePresencas(date, [{ alunoId, status }]);
+          await supabaseService.savePresence(alunoId, date, status);
         } catch (supaError) {
           console.error("Erro ao sincronizar presença com Supabase:", supaError);
         }
       }
+
+      // Secondary: Firestore
+      await setDoc(doc(db, 'presencas', id), presencaData);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'presencas');
     }
@@ -3903,9 +4037,28 @@ const AppContent = () => {
                           key={aluno.id} 
                           onClick={async () => {
                             setSelectedAnamneseAluno(aluno);
-                            const anamnese = await getDoc(doc(db, 'anamneses', aluno.id));
-                            if (anamnese.exists()) {
-                              setAnamneseData(anamnese.data());
+                            
+                            let anamneseData: any = null;
+                            
+                            // Try Supabase first
+                            if (isSupabaseConnected) {
+                              try {
+                                anamneseData = await supabaseService.getAnamnese(aluno.id);
+                              } catch (supaError) {
+                                console.error("Erro ao buscar anamnese no Supabase:", supaError);
+                              }
+                            }
+                            
+                            // Fallback to Firestore
+                            if (!anamneseData) {
+                              const anamnese = await getDoc(doc(db, 'anamneses', aluno.id));
+                              if (anamnese.exists()) {
+                                anamneseData = anamnese.data();
+                              }
+                            }
+
+                            if (anamneseData) {
+                              setAnamneseData(anamneseData);
                             } else {
                               setAnamneseData({
                                 horarioDormir: '',
