@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   LayoutDashboard, 
@@ -1709,27 +1709,13 @@ const AppContent = () => {
       });
       
       const imgData = canvas.toDataURL('image/png', 1.0);
-      const pdf = new jsPDF('l', 'mm', 'a4');
       
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
+      // Use actual credit card size: 85.6mm x 53.98mm
+      const cardWidth = 85.6;
+      const cardHeight = 53.98;
       
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = imgHeight / imgWidth;
-      
-      let finalWidth = pdfWidth - 40; 
-      let finalHeight = finalWidth * ratio;
-      
-      if (finalHeight > pdfHeight - 40) {
-        finalHeight = pdfHeight - 40;
-        finalWidth = finalHeight / ratio;
-      }
-      
-      const x = (pdfWidth - finalWidth) / 2;
-      const y = (pdfHeight - finalHeight) / 2;
-      
-      pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+      const pdf = new jsPDF('l', 'mm', [cardWidth, cardHeight]);
+      pdf.addImage(imgData, 'PNG', 0, 0, cardWidth, cardHeight, undefined, 'FAST');
       pdf.save(`${filename.replace(/\s+/g, '_').toLowerCase()}.pdf`);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -1845,7 +1831,8 @@ const AppContent = () => {
       );
 
       scanner.render((decodedText) => {
-        const match = decodedText.match(/\/atleta\/(\d+)/);
+        // Match any ID after /atleta/ (UUID or numeric)
+        const match = decodedText.match(/\/atleta\/([a-zA-Z0-9-]+)/);
         if (match) {
           const id = match[1];
           const aluno = alunos.find(a => a.id === id);
@@ -4449,7 +4436,7 @@ const AppContent = () => {
                               <p className="text-[8px] font-bold text-white">#{selectedAluno.id.toString().slice(-5)}</p>
                             </div>
                             <div className="bg-white p-0.5 rounded shadow-sm">
-                              <QRCodeSVG 
+                              <QRCodeCanvas 
                                 value={`https://piruaec.com.br/atleta/${selectedAluno.id}`}
                                 size={20}
                                 level="L"
