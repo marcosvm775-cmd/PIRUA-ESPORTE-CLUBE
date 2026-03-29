@@ -59,6 +59,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Toaster, toast } from 'sonner';
 import { auth, db, googleProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDoc, handleFirestoreError, OperationType } from './firebase.ts';
 
 // Utility for tailwind classes
@@ -780,8 +781,15 @@ const AppContent = () => {
     testConnection();
 
     // Handle redirect result
-    getRedirectResult(auth).catch((error) => {
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        toast.success("Login realizado com sucesso!");
+      }
+    }).catch((error) => {
       console.error("Erro ao processar redirecionamento:", error);
+      if (error.code !== 'auth/no-current-user') {
+        toast.error("Erro ao processar login via redirecionamento.");
+      }
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -798,10 +806,25 @@ const AppContent = () => {
 
   const handleLogin = async () => {
     try {
+      toast.loading("Iniciando login...", { id: "login" });
+      // Tenta primeiro com popup
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+      toast.success("Login realizado com sucesso!", { id: "login" });
+    } catch (error: any) {
       console.error("Erro ao fazer login:", error);
-      alert("Erro ao fazer login com Google.");
+      
+      // Se o popup for bloqueado ou houver erro de fechamento, tenta redirecionamento
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        toast.info("O popup foi bloqueado. Tentando redirecionamento...", { id: "login" });
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirError) {
+          console.error("Erro no redirecionamento:", redirError);
+          toast.error("Erro ao redirecionar para o login.", { id: "login" });
+        }
+      } else {
+        toast.error("Erro ao fazer login com Google: " + (error.message || "Erro desconhecido"), { id: "login" });
+      }
     }
   };
 
@@ -1675,6 +1698,7 @@ const AppContent = () => {
   if (!user && currentView !== 'public_registration') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+        <Toaster position="top-right" richColors theme="dark" />
         {/* Background Effects */}
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-yellow-400/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yellow-400/10 rounded-full blur-[120px]" />
@@ -1716,6 +1740,7 @@ const AppContent = () => {
 
   return (
     <div className="flex h-screen bg-zinc-950 font-sans text-zinc-100 overflow-hidden relative">
+      <Toaster position="top-right" richColors theme="dark" />
       {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
