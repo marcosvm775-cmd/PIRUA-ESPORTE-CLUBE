@@ -725,7 +725,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
           >
             Recarregar Página
           </button>
-          {process.env.NODE_ENV === 'development' && (
+          {(import.meta as any).env.DEV && (
             <pre className="mt-8 p-4 bg-zinc-900 rounded-xl text-left text-xs text-red-400 overflow-auto max-w-full">
               {this.state.error?.toString()}
             </pre>
@@ -793,6 +793,7 @@ const AppContent = () => {
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log("Auth state changed:", currentUser ? "User logged in" : "No user");
       if (currentUser) {
         setUserRole('admin');
         setUser(currentUser);
@@ -807,31 +808,39 @@ const AppContent = () => {
   const handleLogin = async () => {
     try {
       toast.loading("Iniciando login...", { id: "login" });
-      // Tenta primeiro com popup
+      console.log("Tentando login com popup...");
       await signInWithPopup(auth, googleProvider);
       toast.success("Login realizado com sucesso!", { id: "login" });
     } catch (error: any) {
-      console.error("Erro ao fazer login:", error);
+      console.error("Erro detalhado de login:", error);
       
-      // Se o popup for bloqueado ou houver erro de fechamento, tenta redirecionamento
-      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
-        toast.info("O popup foi bloqueado. Tentando redirecionamento...", { id: "login" });
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Domínio não autorizado no Firebase. Por favor, adicione este domínio nas configurações de autenticação do seu console Firebase.", { 
+          id: "login",
+          duration: 10000 
+        });
+        console.error("Domínio atual:", window.location.hostname);
+      } else if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        toast.info("O popup foi bloqueado ou fechado. Tentando redirecionamento...", { id: "login" });
         try {
+          console.log("Tentando login com redirecionamento...");
           await signInWithRedirect(auth, googleProvider);
-        } catch (redirError) {
+        } catch (redirError: any) {
           console.error("Erro no redirecionamento:", redirError);
-          toast.error("Erro ao redirecionar para o login.", { id: "login" });
+          toast.error("Erro ao redirecionar: " + (redirError.message || "Erro desconhecido"), { id: "login" });
         }
       } else {
-        toast.error("Erro ao fazer login com Google: " + (error.message || "Erro desconhecido"), { id: "login" });
+        toast.error("Erro ao fazer login: " + (error.message || "Erro desconhecido"), { id: "login" });
       }
     }
   };
 
   const handleLogout = async () => {
     try {
+      console.log("Iniciando logout...");
       await signOut(auth);
       setCurrentView('dashboard');
+      toast.success("Sessão encerrada.");
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
     }
@@ -1685,6 +1694,8 @@ const AppContent = () => {
   const filteredAlunos = useMemo(() => {
     return alunos.filter(a => a.nome.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [searchQuery, alunos]);
+
+  console.log("App rendering. AuthLoading:", authLoading, "User:", user ? "Yes" : "No");
 
   if (authLoading) {
     return (

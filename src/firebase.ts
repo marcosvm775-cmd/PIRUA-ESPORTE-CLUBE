@@ -35,10 +35,22 @@ import {
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
+if ((import.meta as any).env.DEV) {
+  console.log("Firebase Config:", { ...firebaseConfig, apiKey: "REDACTED" });
+}
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+if ((import.meta as any).env.DEV) {
+  console.log("Firestore initialized:", firebaseConfig.firestoreDatabaseId);
+}
 export const auth = getAuth(app);
+if ((import.meta as any).env.DEV) {
+  console.log("Auth initialized:", auth.name);
+}
 export const googleProvider = new GoogleAuthProvider();
+if ((import.meta as any).env.DEV) {
+  console.log("Google Provider initialized");
+}
 
 // Re-export Firestore functions
 export { 
