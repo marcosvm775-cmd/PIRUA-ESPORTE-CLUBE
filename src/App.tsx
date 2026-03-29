@@ -61,6 +61,8 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Toaster, toast } from 'sonner';
 import { auth, db, googleProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDoc, handleFirestoreError, OperationType } from './firebase.ts';
+import { supabase, checkSupabaseConnection } from './supabase';
+import { supabaseService } from './services/supabaseService';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -764,8 +766,63 @@ const AppContent = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [anamneseData, setAnamneseData] = useState<any>({});
   const [eventLineups, setEventLineups] = useState<Record<string, string[]>>({});
+  const [supabaseEnabled, setSupabaseEnabled] = useState(false);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [isSyncingToSupabase, setIsSyncingToSupabase] = useState(false);
 
-  // --- Firebase Auth ---
+  // --- Supabase Connection Check ---
+  useEffect(() => {
+    const checkConnection = async () => {
+      const connected = await checkSupabaseConnection();
+      setIsSupabaseConnected(connected);
+      
+      // Load preference from local storage
+      const savedPreference = localStorage.getItem('supabase_sync_enabled');
+      if (savedPreference === 'true') {
+        setSupabaseEnabled(true);
+      }
+    };
+    checkConnection();
+  }, []);
+
+  const toggleSupabaseSync = (enabled: boolean) => {
+    setSupabaseEnabled(enabled);
+    localStorage.setItem('supabase_sync_enabled', enabled.toString());
+    if (enabled) {
+      toast.success("Sincronização com Supabase ativada!");
+    } else {
+      toast.info("Sincronização com Supabase desativada.");
+    }
+  };
+
+  const syncAllToSupabase = async () => {
+    if (!isSupabaseConnected) {
+      toast.error("Supabase não está conectado. Verifique as variáveis de ambiente.");
+      return;
+    }
+    
+    setIsSyncingToSupabase(true);
+    const toastId = toast.loading("Sincronizando dados com Supabase...");
+    
+    try {
+      // Sync Alunos
+      for (const aluno of alunos) {
+        await supabaseService.saveAluno(aluno);
+      }
+      
+      // Sync Settings
+      await supabaseService.saveSetting('clubShield', clubShield);
+      await supabaseService.saveSetting('instagramLink', instagramLink);
+      await supabaseService.saveSetting('whatsappLink', whatsappLink);
+      
+      toast.success("Sincronização concluída com sucesso!", { id: toastId });
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      toast.error(`Erro na sincronização: ${error.message}`, { id: toastId });
+    } finally {
+      setIsSyncingToSupabase(false);
+    }
+  };
   useEffect(() => {
     // Connection test
     const testConnection = async () => {
@@ -1095,6 +1152,17 @@ const AppContent = () => {
     try {
       const alunoRef = doc(db, 'alunos', aluno.id);
       await setDoc(alunoRef, { ...aluno, uid: user.uid }, { merge: true });
+      
+      // Sync to Supabase if enabled
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.saveAluno(aluno);
+          console.log("Aluno sincronizado com Supabase");
+        } catch (supaError) {
+          console.error("Erro ao sincronizar com Supabase:", supaError);
+        }
+      }
+      
       alert('Cadastro salvo com sucesso na nuvem!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'alunos');
@@ -1105,6 +1173,17 @@ const AppContent = () => {
     if (window.confirm('Tem certeza que deseja excluir este aluno?')) {
       try {
         await deleteDoc(doc(db, 'alunos', id));
+        
+        // Sync to Supabase if enabled
+        if (supabaseEnabled && isSupabaseConnected) {
+          try {
+            await supabaseService.deleteAluno(id);
+            console.log("Aluno excluído do Supabase");
+          } catch (supaError) {
+            console.error("Erro ao excluir aluno do Supabase:", supaError);
+          }
+        }
+        
         alert('Aluno excluído com sucesso!');
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, 'alunos');
@@ -1115,6 +1194,17 @@ const AppContent = () => {
   const handleSaveSetting = async (key: string, value: string) => {
     try {
       await setDoc(doc(db, 'settings', key), { value, updatedAt: new Date().toISOString() });
+      
+      // Sync to Supabase if enabled
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.saveSetting(key, value);
+          console.log(`Configuração ${key} sincronizada com Supabase`);
+        } catch (supaError) {
+          console.error("Erro ao sincronizar configuração com Supabase:", supaError);
+        }
+      }
+      
       return true;
     } catch (error) {
       console.error("Error saving setting:", error);
@@ -1547,15 +1637,29 @@ const AppContent = () => {
     }
 
     try {
+      const presencasToSync = [];
       for (const item of lista) {
         const id = `${date}_${item.alunoId}`;
-        await setDoc(doc(db, 'presencas', id), {
+        const presencaData = {
           alunoId: item.alunoId,
           status: item.status,
           date,
           uid: user.uid
-        });
+        };
+        await setDoc(doc(db, 'presencas', id), presencaData);
+        presencasToSync.push(presencaData);
       }
+      
+      // Sync to Supabase if enabled
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.savePresencas(date, lista);
+          console.log("Chamada sincronizada com Supabase");
+        } catch (supaError) {
+          console.error("Erro ao sincronizar chamada com Supabase:", supaError);
+        }
+      }
+      
       alert('Chamada salva com sucesso na nuvem!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'presencas');
@@ -1566,12 +1670,22 @@ const AppContent = () => {
     const date = new Date().toISOString().split('T')[0];
     const id = `${date}_${alunoId}`;
     try {
-      await setDoc(doc(db, 'presencas', id), {
+      const presencaData = {
         alunoId,
         status,
         date,
         uid: user.uid
-      });
+      };
+      await setDoc(doc(db, 'presencas', id), presencaData);
+      
+      // Sync to Supabase if enabled
+      if (supabaseEnabled && isSupabaseConnected) {
+        try {
+          await supabaseService.savePresencas(date, [{ alunoId, status }]);
+        } catch (supaError) {
+          console.error("Erro ao sincronizar presença com Supabase:", supaError);
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'presencas');
     }
@@ -2817,6 +2931,70 @@ const AppContent = () => {
                           placeholder="https://wa.me/..." 
                         />
                       </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 shadow-xl">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 uppercase tracking-tight">
+                    <Cloud className="text-yellow-400" /> Integração Supabase
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800">
+                      <div>
+                        <h4 className="text-lg font-black text-zinc-100 mb-1">Sincronização em Nuvem</h4>
+                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                          Status: {isSupabaseConnected ? (
+                            <span className="text-green-500 flex items-center gap-1 inline-flex">
+                              <ShieldCheck size={12} /> Conectado
+                            </span>
+                          ) : (
+                            <span className="text-red-500 flex items-center gap-1 inline-flex">
+                              <ShieldAlert size={12} /> Desconectado
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => toggleSupabaseSync(!supabaseEnabled)}
+                        className={cn(
+                          "w-14 h-8 rounded-full transition-all relative p-1 flex items-center",
+                          supabaseEnabled ? "bg-yellow-400" : "bg-zinc-700"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-6 h-6 bg-white rounded-full transition-all shadow-md",
+                          supabaseEnabled ? "translate-x-6" : "translate-x-0"
+                        )} />
+                      </button>
+                    </div>
+
+                    {supabaseEnabled && isSupabaseConnected && (
+                      <div className="bg-zinc-800/30 p-6 rounded-2xl border border-zinc-800 space-y-4">
+                        <p className="text-sm text-zinc-400 leading-relaxed">
+                          A sincronização está ativa. Você pode forçar uma sincronização manual de todos os dados locais para o Supabase agora.
+                        </p>
+                        <button 
+                          onClick={syncAllToSupabase}
+                          disabled={isSyncingToSupabase}
+                          className="bg-yellow-400 text-black px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-400/20 flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {isSyncingToSupabase ? (
+                            <>Sincronizando...</>
+                          ) : (
+                            <><Database size={18} /> Sincronizar Agora</>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {!isSupabaseConnected && (
+                      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+                        <AlertTriangle className="text-red-500 shrink-0" size={20} />
+                        <p className="text-xs text-red-200 leading-relaxed">
+                          Não foi possível conectar ao Supabase. Certifique-se de que as variáveis <strong>VITE_SUPABASE_URL</strong> e <strong>VITE_SUPABASE_ANON_KEY</strong> estão configuradas corretamente no ambiente.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
