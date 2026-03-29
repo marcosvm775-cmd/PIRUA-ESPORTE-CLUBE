@@ -905,6 +905,17 @@ const AppContent = () => {
 
   // --- Sync ---
   useEffect(() => {
+    if (!user) {
+      // Reset data to mock or empty when logged out
+      setAlunos(MOCK_ALUNOS);
+      setEventos(MOCK_EVENTOS);
+      setProfessores(MOCK_PROFESSORES);
+      setEventLineups({});
+      setPresencas({});
+      setPresencasHistory([]);
+      return;
+    }
+
     const unsubAlunos = onSnapshot(collection(db, 'alunos'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aluno));
       setAlunos(data.length > 0 ? data : MOCK_ALUNOS);
